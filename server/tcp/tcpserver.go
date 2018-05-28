@@ -1,11 +1,10 @@
 package tcp
 
 import (
-	"net"
-	"log"
 	"encoding/binary"
 	"io"
-
+	"log"
+	"net"
 	"packet"
 )
 
@@ -76,7 +75,6 @@ func handleTCPClient(conn net.Conn) {
 
 				wPacket.Body = []byte(`{"success":true,"data":"反馈信息"}`)
 				binary.BigEndian.PutUint64(wPacket.Header[8:16], uint64(len(rPacket.Body)))
-
 
 				conn.Write(append(rPacket.Header[:], rPacket.Body[:]...))
 				break
