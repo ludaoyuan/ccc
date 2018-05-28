@@ -5,7 +5,6 @@ import (
 	"io"
 	"log"
 	"net"
-
 	"packet"
 )
 
