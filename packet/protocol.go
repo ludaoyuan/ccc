@@ -3,63 +3,25 @@ package packet
 import (
 	"bytes"
 	"encoding/gob"
-	"fmt"
 )
 
-// error codes used by this  protocol scheme
-const (
-	ErrMsgTooLong = iota
-	ErrDecode
-	ErrWrite
-	ErrInvalidMsgCode
-	ErrInvalidMsgType
-	ErrHandshake
-	ErrNoHandler
-	ErrHandler
-)
+type Body map[string]interface{}
 
-// error description strings associated with the codes
-var errorToString = map[int]string{
-	ErrMsgTooLong:     "Message too long",
-	ErrDecode:         "Invalid message (RLP error)",
-	ErrWrite:          "Error sending message",
-	ErrInvalidMsgCode: "Invalid message code",
-	ErrInvalidMsgType: "Invalid message type",
-	ErrHandshake:      "Handshake error",
-	ErrNoHandler:      "No handler registered error",
-	ErrHandler:        "Message handler error",
+// implement error interface
+func (b Body) Error() string {
+	return b["msg"].(string)
 }
 
-type ErrMsg struct {
-	ErrCode uint64
-	ErrInfo []byte
-}
-
-// Error implement of Error interface
-func (err ErrMsg) Error() string {
-	return fmt.Sprintf("Code: %d, Info: %s", err.ErrCode, err.ErrInfo)
-}
-
-func NewErrMsg(errInfo []byte) *ErrMsg {
-	return &ErrMsg{
-		ErrInfo: errInfo,
-	}
-}
-
-type Msg struct {
-	ErrMsg  *ErrMsg
-	Message interface{}
-}
-
-func (m *Msg) Bytes() ([]byte, error) {
+func (b Body) Decode(bts []byte) error {
 	var buf bytes.Buffer
-	encoder := gob.NewEncoder(&buf)
-	if err := encoder.Encode(m); err != nil {
-		return nil, err
+	if _, err := buf.Read(bts); err != nil {
+		return err
 	}
-	return buf.Bytes(), nil
-}
+	gob.Register(Body{})
+	decoder := gob.NewDecoder(&buf)
 
-func (m *Msg) Err() error {
-	return m.ErrMsg
+	if err := decoder.Decode(b); err != nil {
+		return err
+	}
+	return nil
 }

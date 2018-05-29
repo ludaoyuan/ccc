@@ -1,11 +1,19 @@
 package tcp
 
 import (
+	"bytes"
 	"encoding/binary"
+	"encoding/gob"
 	"io"
+	"io/ioutil"
 	"log"
 	"net"
+	"net/http"
 	"packet"
+
+	_ "net/http/pprof"
+
+	_ "github.com/mkevac/debugcharts"
 )
 
 func handleTCPClient(conn net.Conn) {
@@ -32,7 +40,7 @@ func handleTCPClient(conn net.Conn) {
 			break
 		}
 
-		if !rPacket.Validation(buf, n, &wPacket.Body) {
+		if ok, _ := rPacket.Validation(buf, n, &wPacket.Body); !ok {
 			log.Println(string(wPacket.Body))
 			conn.Write(append(wPacket.Header[:], wPacket.Body[:]...))
 			conn.Close()
@@ -46,12 +54,14 @@ func handleTCPClient(conn net.Conn) {
 		for {
 			n, err = conn.Read(buf[:])
 			if err != nil {
+				// log.Println(err.Error())
 				if err != io.EOF {
 					log.Println(err.Error())
 					conn.Close()
 					return
 				}
 
+				log.Println("EOF")
 				rPacket.Body = []byte{}
 				break
 			}
@@ -71,10 +81,28 @@ func handleTCPClient(conn net.Conn) {
 			if length == 0 {
 				log.Println(string(rPacket.Body))
 
-				rPacket.Body = []byte{}
+				rPacket.ResetRPacket()
 
-				wPacket.Body = []byte(`{"success":true,"data":"反馈信息"}`)
-				binary.BigEndian.PutUint64(wPacket.Header[8:16], uint64(len(rPacket.Body)))
+				rPacket.Body = []byte(`{"success":true,"data":"反馈信息"}`)
+				bm := make(packet.Body)
+				bm["code"] = "0000"
+				bm["msg"] = "Success"
+
+				var buf bytes.Buffer
+				gob.Register(packet.Body{})
+				encoder := gob.NewEncoder(&buf)
+				if err := encoder.Encode(bm); err != nil {
+					log.Println(err.Error())
+					rPacket.ResetRPacket()
+					break
+				}
+				bytes, err := ioutil.ReadAll(&buf)
+				if err != nil {
+					log.Println(err.Error())
+					break
+				}
+				rPacket.Body = append(rPacket.Body, bytes[:]...)
+				rPacket.SetLength()
 
 				conn.Write(append(rPacket.Header[:], rPacket.Body[:]...))
 				break
@@ -84,6 +112,11 @@ func handleTCPClient(conn net.Conn) {
 }
 
 func Run(domain, port string) {
+	go func() {
+		log.Fatal(http.ListenAndServe(":8081", nil))
+	}()
+	log.Printf("you can now open http://localhost:8081/debug/charts/ in your browser")
+	log.SetFlags(log.Lshortfile | log.LstdFlags)
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", ":9000")
 	if err != nil {
 		log.Fatalln(err.Error())
