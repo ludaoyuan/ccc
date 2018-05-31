@@ -16,6 +16,22 @@ func handleTCPClient(conn net.Conn) {
 
 	rPacket, wPacket := packet.PacketsCreation()
 
+	rPacket.Body = make([]byte, 0)
+
+	var buf [512]byte
+	var err error
+	n := 0
+
+	for {
+		n, err = conn.Read(buf[:])
+		if err != nil {
+			if err != io.EOF {
+				log.Println(err.Error())
+				conn.Close()
+			}
+			break
+		}
+
 		bodyErr := rPacket.Validation(buf, n, &wPacket.Body)
 		if bodyErr != nil {
 			log.Println(wPacket.Body)

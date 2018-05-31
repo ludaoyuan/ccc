@@ -3,15 +3,12 @@ package main
 import (
 	"conf"
 	"log"
-<<<<<<< HEAD:nnc.go
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"runtime"
 	"runtime/pprof"
 	inchttp "server/http"
-=======
->>>>>>> mosalut:inc.go
 	"server/tcp"
 	// _ "github.com/mkevac/debugcharts"
 )
