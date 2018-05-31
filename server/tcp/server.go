@@ -40,7 +40,7 @@ func handleTCPClient(conn net.Conn) {
 			return
 		}
 
-		length := rPacket.GetLength()
+		length := int(binary.BigEndian.Uint64(buf[8:16]))
 
 		log.Println(buf, "------------------------------------------")
 
@@ -65,16 +65,9 @@ func handleTCPClient(conn net.Conn) {
 
 			if length < 0 {
 				log.Println("报文头错误")
-
-				bm["code"] = uint16(0x0002)
-				bm["msg"] = "Wrong header"
-
-				wPacket.SetLength()
-				conn.Write(append(wPacket.Header[:], wPacket.Body[:]...))
-				conn.Close()
-
+				conn.Write([]byte("报文头错误"))
 				rPacket.Body = []byte{}
-
+				conn.Close()
 				return
 			}
 

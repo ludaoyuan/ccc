@@ -9,7 +9,9 @@ import (
 	"runtime"
 	"runtime/pprof"
 	inchttp "server/http"
+
 	"server/tcp"
+//	"client/tcp"
 	// _ "github.com/mkevac/debugcharts"
 )
 
@@ -58,5 +60,6 @@ func main() {
 	log.SetFlags(log.Lshortfile | log.LstdFlags)
 
 	go tcp.Run(config["TCP"]["domain"], config["TCP"]["port"])
+//	client.Run("127.0.0.1:9000")
 	inchttp.Run(config["HTTP"]["port"], config["HTTP"]["webroot"])
 }
