@@ -9,10 +9,6 @@ import (
 	"log"
 	"net"
 	"packet"
-
-	_ "net/http/pprof"
-
-	_ "github.com/mkevac/debugcharts"
 )
 
 var (
@@ -60,6 +56,40 @@ func handleSend(conn net.Conn, pkt *packet.Packet) {
 	log.Println(pkt.Header)
 }
 
+func handle(conn net.Conn, pkt *packet.Packet, code uint, msg string) error {
+	defer pkt.ResetRPacket()
+
+	var buf bytes.Buffer
+	bm := make(packet.Body)
+
+	bm["type"] = 1
+	bm["code"] = code
+	bm["msg"] = msg
+
+	encoder := gob.NewEncoder(&buf)
+
+	err := encoder.Encode(bm)
+	if err != nil {
+		log.Println(err.Error())
+		return err
+	}
+
+	body, err := ioutil.ReadAll(&buf)
+	if err != nil {
+		log.Println(err.Error())
+		return err
+	}
+
+	log.Println(msg)
+	pkt.Body = append(pkt.Body, body[:]...)
+	_, err = conn.Write(append(pkt.Header[:], pkt.Body[:]...))
+	if err != nil {
+		log.Println(err.Error())
+		return err
+	}
+	return nil
+}
+
 func handleRead(conn net.Conn, rPacket *packet.Packet) {
 	var (
 		buf [512]byte
@@ -77,7 +107,8 @@ func handleRead(conn net.Conn, rPacket *packet.Packet) {
 			break
 		}
 
-		if ok, _ := rPacket.Validation(buf, n, &rPacket.Body); !ok {
+		bodyErr := rPacket.Validation(buf, n, &wPacket.Body)
+		if bodyErr != nil {
 			log.Println(string(wPacket.Body))
 			conn.Write(append(wPacket.Header[:], wPacket.Body[:]...))
 			conn.Close()
@@ -93,6 +124,7 @@ func handleRead(conn net.Conn, rPacket *packet.Packet) {
 				log.Println(err.Error())
 				if err != io.EOF {
 					log.Println(err.Error())
+					conn.Close()
 					return
 				}
 
@@ -105,26 +137,20 @@ func handleRead(conn net.Conn, rPacket *packet.Packet) {
 
 			if length < 0 {
 				log.Println("报文头错误")
-				conn.Write([]byte("报文头错误"))
-				rPacket.Body = []byte{}
 				conn.Close()
-				rPacket.ResetRPacket()
-				break
+				return
 			}
 
 			if length == 0 {
 				log.Println(string(rPacket.Body))
+				rPacket.ResetRPacket()
 
-				rPacket.Body = []byte{}
-
-				wPacket.Body = []byte(`{"success":true,"data":"反馈信息"}`)
-				binary.BigEndian.PutUint64(wPacket.Header[8:16], uint64(len(rPacket.Body)))
-
-				conn.Write(append(rPacket.Header[:], rPacket.Body[:]...))
+				// err := handle(conn, wPacket, 0, "Success 反馈信息")
+				// if err != nil {
+				// 	log.Println(err.Error())
+				// }
 				break
 			}
-
-			rPacket.ResetRPacket()
 		}
 	}
 }
@@ -138,11 +164,10 @@ func connect(service string) {
 }
 
 func Run(service string) {
-
 	log.SetFlags(log.Lshortfile | log.LstdFlags)
 	connect(service)
 	rPacket, wPacket = packet.PacketsCreation()
 
-	handleSend(conn, rPacket)
+	handleSend(conn, wPacket)
 	handleRead(conn, rPacket)
 }

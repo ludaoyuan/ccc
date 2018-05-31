@@ -8,21 +8,13 @@ import (
 	"io/ioutil"
 	"log"
 	"net"
-	"net/http"
 	"packet"
-
-	_ "net/http/pprof"
-
-	_ "github.com/mkevac/debugcharts"
 )
 
 func handleTCPClient(conn net.Conn) {
 	defer conn.Close()
 
-	rPacket := &packet.Packet{[512]byte{0xff, 0xff, 0x55, 0x55, 0xff, 0xff, 0x55, 0x55}, []byte{}}
-	copy(rPacket.Header[504:], []byte{0xff, 0xff, 0x55, 0x55, 0xff, 0xff, 0x55, 0x55})
-	wPacket := &packet.Packet{[512]byte{0x55, 0x55, 0xff, 0xff, 0x55, 0x55, 0xff, 0xff}, []byte{}}
-	copy(wPacket.Header[504:], []byte{0x55, 0x55, 0xff, 0xff, 0x55, 0x55, 0xff, 0xff})
+	rPacket, wPacket := packet.PacketsCreation()
 
 	rPacket.Body = make([]byte, 0)
 
@@ -40,8 +32,9 @@ func handleTCPClient(conn net.Conn) {
 			break
 		}
 
-		if ok, _ := rPacket.Validation(buf, n, &wPacket.Body); !ok {
-			log.Println(string(wPacket.Body))
+		bodyErr := rPacket.Validation(buf, n, &wPacket.Body)
+		if bodyErr != nil {
+			log.Println(wPacket.Body)
 			conn.Write(append(wPacket.Header[:], wPacket.Body[:]...))
 			conn.Close()
 			return
@@ -83,7 +76,7 @@ func handleTCPClient(conn net.Conn) {
 
 				rPacket.ResetRPacket()
 
-				rPacket.Body = []byte(`{"success":true,"data":"反馈信息"}`)
+				wPacket.Body = []byte(`{"success":true,"data":"反馈信息"}`)
 				bm := make(packet.Body)
 				bm["code"] = "0000"
 				bm["msg"] = "Success"
@@ -93,7 +86,7 @@ func handleTCPClient(conn net.Conn) {
 				encoder := gob.NewEncoder(&buf)
 				if err := encoder.Encode(bm); err != nil {
 					log.Println(err.Error())
-					rPacket.ResetRPacket()
+					wPacket.ResetWPacket()
 					break
 				}
 				bytes, err := ioutil.ReadAll(&buf)
@@ -101,10 +94,11 @@ func handleTCPClient(conn net.Conn) {
 					log.Println(err.Error())
 					break
 				}
-				rPacket.Body = append(rPacket.Body, bytes[:]...)
-				rPacket.SetLength()
+				wPacket.Body = append(wPacket.Body, bytes[:]...)
+				wPacket.SetLength()
 
-				conn.Write(append(rPacket.Header[:], rPacket.Body[:]...))
+				conn.Write(append(wPacket.Header[:], wPacket.Body[:]...))
+				wPacket.ResetWPacket()
 				break
 			}
 		}
@@ -112,10 +106,6 @@ func handleTCPClient(conn net.Conn) {
 }
 
 func Run(domain, port string) {
-	go func() {
-		log.Fatal(http.ListenAndServe(":8081", nil))
-	}()
-	log.Printf("you can now open http://localhost:8081/debug/charts/ in your browser")
 	log.SetFlags(log.Lshortfile | log.LstdFlags)
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", ":9000")
 	if err != nil {
