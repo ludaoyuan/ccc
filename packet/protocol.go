@@ -1,5 +1,6 @@
 package packet
 
+/*
 import (
 	"bytes"
 	"encoding/gob"
@@ -63,3 +64,4 @@ func (m *Msg) Bytes() ([]byte, error) {
 func (m *Msg) Err() error {
 	return m.ErrMsg
 }
+*/

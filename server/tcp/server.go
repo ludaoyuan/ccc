@@ -11,11 +11,7 @@ import (
 func handleTCPClient(conn net.Conn) {
 	defer conn.Close()
 
-	rPacket := &packet.Packet{[512]byte{0xff, 0xff, 0x55, 0x55, 0xff, 0xff, 0x55, 0x55}, []byte{}}
-	copy(rPacket.Header[504:], []byte{0xff, 0xff, 0x55, 0x55, 0xff, 0xff, 0x55, 0x55})
-	wPacket := &packet.Packet{[512]byte{0x55, 0x55, 0xff, 0xff, 0x55, 0x55, 0xff, 0xff}, []byte{}}
-	copy(wPacket.Header[504:], []byte{0x55, 0x55, 0xff, 0xff, 0x55, 0x55, 0xff, 0xff})
-
+	rPacket, wPacket := packet.PacketsCreation()
 	rPacket.Body = make([]byte, 0)
 
 	var buf [512]byte
@@ -32,14 +28,15 @@ func handleTCPClient(conn net.Conn) {
 			break
 		}
 
-		if !rPacket.Validation(buf, n, &wPacket.Body) {
-			log.Println(string(wPacket.Body))
+		ok, bm := rPacket.Validation(buf, n, &wPacket.Body)
+		if !ok {
+			wPacket.SetLength()
 			conn.Write(append(wPacket.Header[:], wPacket.Body[:]...))
 			conn.Close()
 			return
 		}
 
-		length := int(binary.BigEndian.Uint64(buf[8:16]))
+		length := rPacket.GetLength()
 
 		log.Println(buf, "------------------------------------------")
 
@@ -62,18 +59,22 @@ func handleTCPClient(conn net.Conn) {
 
 			if length < 0 {
 				log.Println("报文头错误")
-				conn.Write([]byte("报文头错误"))
-				rPacket.Body = []byte{}
+
+				bm["code"] = uint16(0x0002)
+				bm["msg"] = "Wrong header"
+
+				wPacket.SetLength()
+				conn.Write(append(wPacket.Header[:], wPacket.Body[:]...))
 				conn.Close()
+
+				rPacket.Body = []byte{}
+
 				return
 			}
 
 			if length == 0 {
 				log.Println(string(rPacket.Body))
 
-				rPacket.Body = []byte{}
-
-				wPacket.Body = []byte(`{"success":true,"data":"反馈信息"}`)
 				binary.BigEndian.PutUint64(wPacket.Header[8:16], uint64(len(rPacket.Body)))
 
 				conn.Write(append(rPacket.Header[:], rPacket.Body[:]...))

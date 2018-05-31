@@ -10,48 +10,33 @@ import (
 	"packet"
 )
 
-// Client is the client for communicating with server
-type Client struct {
-	conn   net.Conn
-	Buffer *packet.Packet
-}
-
-// TODO: 日志模块，选择一个等级日志模块
-/*
-Run
-ial
-Read
-Write
-Buffer
-*/
-
 // parseHeader 读取消息头
-func (c *Client) parseHeader() (err error) {
+func parseHeader(conn *net.TCPConn) error {
 	var (
+		err error
 		n   int
 		buf [512]byte
 	)
 
-	n, err = c.conn.Read(buf[:])
+	n, err = conn.Read(buf[:])
 	if err != nil && err != io.EOF {
-		log.Println(err.Error())
-		return
+		return err
 	}
 
 	var errMsg []byte
-	if !c.Buffer.Validation(buf, n, &errMsg) {
+	if packet.Header.Validation(buf, n, &errMsg) {
 		err = errors.New(string(errMsg))
 		c.handleError(packet.NewErrMsg(errMsg))
-		return
+		return err
 	}
 
-	copy(c.Buffer.Header[:], buf[:n])
+	copy(Header[:], buf[:n])
 
 	return
 }
 
 // Body 读入消息体
-func (c *Client) parseBody() (err error) {
+func parseBody() (err error) {
 	var (
 		n   int
 		buf [512]byte
@@ -63,7 +48,7 @@ func (c *Client) parseBody() (err error) {
 			log.Println(err.Error())
 		}
 
-		c.Buffer.Body = append(c.Buffer.Body, buf[:n]...)
+		p.Body = append(c.Buffer.Body, buf[:n]...)
 		length -= n
 
 		if length < 0 {
@@ -79,24 +64,28 @@ func (c *Client) parseBody() (err error) {
 	}
 }
 
-// handleError 错误处理函数
 func (c *Client) handleError(errMsg *packet.ErrMsg) {
 	c.Send(&packet.Msg{ErrMsg: errMsg})
 }
 
-// Dial connects to the remote server. Returns error if it can't.
-func (c *Client) Dial(service string) error {
-	tcpAddr, err := net.ResolveTCPAddr("tcp", service)
-	if err != nil {
-		return err
-	}
-	c.conn, err = net.DialTCP("tcp", nil, tcpAddr)
-	return err
-}
+func Connect(service string)(*net.TCPConn, error) {
+	var (
+		connection *net.TCPConn
+		address *net.TCPAddr
+		err error
+	)
 
-// Close close the socket
-func (c *Client) Close() error {
-	return c.conn.Close()
+	address, err = net.ResolveTCPAddr("tcp", service)
+	if err != nil {
+		return nil, err
+	}
+
+	connection, err = net.DialTCP("tcp", nil, tcpAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	return connection, nil
 }
 
 // Read dispatches incoming messages
@@ -125,6 +114,7 @@ func (c *Client) Send(msg *packet.Msg) {
 		log.Println(err.Error())
 		return
 	}
+
 	c.Buffer.Body = append(c.Buffer.Body, buf[:]...)
 	c.Buffer.SetLength(uint64(len(c.Buffer.Body)))
 	log.Println(c.Buffer.Header)
@@ -147,11 +137,8 @@ func (c *Client) Send(msg *packet.Msg) {
 }
 
 // Run Run
-func (c *Client) Run(service string) {
-	// show line numbers
-	log.SetFlags(log.Lshortfile | log.LstdFlags)
-
-	if err := c.Dial(service); err != nil {
+func Run(service string) {
+	if err := Connect(service); err != nil {
 		log.Fatalln(err.Error())
 	}
 
@@ -168,13 +155,4 @@ func (c *Client) Run(service string) {
 	// 			return err
 	// 		}
 	// 	}
-}
-
-// DefaultClient return a websocket hander
-func DefaultClient() *Client {
-	return &Client{
-		// conn:,
-		Buffer: packet.RPacket(),
-		// Error:,
-	}
 }
