@@ -16,22 +16,6 @@ func handleTCPClient(conn net.Conn) {
 
 	rPacket, wPacket := packet.PacketsCreation()
 
-	rPacket.Body = make([]byte, 0)
-
-	var buf [512]byte
-	var err error
-	n := 0
-
-	for {
-		n, err = conn.Read(buf[:])
-		if err != nil {
-			if err != io.EOF {
-				log.Println(err.Error())
-				conn.Close()
-			}
-			break
-		}
-
 		bodyErr := rPacket.Validation(buf, n, &wPacket.Body)
 		if bodyErr != nil {
 			log.Println(wPacket.Body)
@@ -40,7 +24,7 @@ func handleTCPClient(conn net.Conn) {
 			return
 		}
 
-		length := int(binary.BigEndian.Uint64(buf[8:16]))
+		length := rPacket.GetLength()
 
 		log.Println(buf, "------------------------------------------")
 
@@ -65,9 +49,16 @@ func handleTCPClient(conn net.Conn) {
 
 			if length < 0 {
 				log.Println("报文头错误")
-				conn.Write([]byte("报文头错误"))
-				rPacket.Body = []byte{}
+
+				bm["code"] = uint16(0x0002)
+				bm["msg"] = "Wrong header"
+
+				wPacket.SetLength()
+				conn.Write(append(wPacket.Header[:], wPacket.Body[:]...))
 				conn.Close()
+
+				rPacket.Body = []byte{}
+
 				return
 			}
 

@@ -3,12 +3,15 @@ package main
 import (
 	"conf"
 	"log"
+<<<<<<< HEAD:nnc.go
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"runtime"
 	"runtime/pprof"
 	inchttp "server/http"
+=======
+>>>>>>> mosalut:inc.go
 	"server/tcp"
 	// _ "github.com/mkevac/debugcharts"
 )
@@ -53,7 +56,9 @@ func main() {
 	}(c, f)
 
 	config := make(conf.Config)
-	config.Init("/etc/nnc/nnc.conf")
+	config.Init("/etc/inc/inc.conf")
+
+	log.SetFlags(log.Lshortfile | log.LstdFlags)
 
 	go tcp.Run(config["TCP"]["domain"], config["TCP"]["port"])
 	inchttp.Run(config["HTTP"]["port"], config["HTTP"]["webroot"])

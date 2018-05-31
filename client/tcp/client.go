@@ -2,172 +2,157 @@ package client
 
 import (
 	"bytes"
-	"encoding/binary"
 	"encoding/gob"
+	"errors"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"packet"
 )
 
-var (
-	conn    net.Conn
-	rPacket *packet.Packet
-	wPacket *packet.Packet
-)
-
-func checkFalt(err error) {
-	if err != nil {
-		log.Fatalln(err.Error())
-	}
-}
-
-func handleSend(conn net.Conn, pkt *packet.Packet) {
-	var buf bytes.Buffer
-
-	gob.Register(packet.Body{})
-
-	bm := make(packet.Body)
-	encoder := gob.NewEncoder(&buf)
-
-	bm["type"] = 0
-	bm["data"] = "sanghai"
-
-	err := encoder.Encode(bm)
-	if err != nil {
-		log.Println(err.Error())
-		return
-	}
-
-	body, err := ioutil.ReadAll(&buf)
-	if err != nil {
-		log.Println(err.Error())
-		return
-	}
-
-	pkt.Body = append(pkt.Body, body[:]...)
-	pkt.SetLength()
-	_, err = conn.Write(append(pkt.Header[:], pkt.Body[:]...))
-	if err != nil {
-		log.Println(err.Error())
-		return
-	}
-	log.Println(pkt.Header)
-}
-
-func handle(conn net.Conn, pkt *packet.Packet, code uint, msg string) error {
-	defer pkt.ResetRPacket()
-
-	var buf bytes.Buffer
-	bm := make(packet.Body)
-
-	bm["type"] = 1
-	bm["code"] = code
-	bm["msg"] = msg
-
-	encoder := gob.NewEncoder(&buf)
-
-	err := encoder.Encode(bm)
-	if err != nil {
-		log.Println(err.Error())
-		return err
-	}
-
-	body, err := ioutil.ReadAll(&buf)
-	if err != nil {
-		log.Println(err.Error())
-		return err
-	}
-
-	log.Println(msg)
-	pkt.Body = append(pkt.Body, body[:]...)
-	_, err = conn.Write(append(pkt.Header[:], pkt.Body[:]...))
-	if err != nil {
-		log.Println(err.Error())
-		return err
-	}
-	return nil
-}
-
-func handleRead(conn net.Conn, rPacket *packet.Packet) {
+// parseHeader 读取消息头
+func parseHeader(conn *net.TCPConn) error {
 	var (
-		buf [512]byte
 		err error
 		n   int
+		buf [512]byte
 	)
 
+	n, err = conn.Read(buf[:])
+	if err != nil && err != io.EOF {
+		return err
+	}
+
+	var errMsg []byte
+	if packet.Header.Validation(buf, n, &errMsg) {
+		err = errors.New(string(errMsg))
+		c.handleError(packet.NewErrMsg(errMsg))
+		return err
+	}
+
+	copy(Header[:], buf[:n])
+
+	return
+}
+
+// Body 读入消息体
+func parseBody() (err error) {
+	var (
+		n   int
+		buf [512]byte
+	)
+	length := c.Buffer.Length()
 	for {
-		n, err = conn.Read(buf[:])
-		if err != nil {
-			if err != io.EOF {
-				log.Println(err.Error())
-				conn.Close()
-			}
-			break
+		n, err = c.conn.Read(buf[:])
+		if err != nil && err != io.EOF {
+			log.Println(err.Error())
 		}
 
-		bodyErr := rPacket.Validation(buf, n, &wPacket.Body)
-		if bodyErr != nil {
-			log.Println(string(wPacket.Body))
-			conn.Write(append(wPacket.Header[:], wPacket.Body[:]...))
-			conn.Close()
+		p.Body = append(c.Buffer.Body, buf[:n]...)
+		length -= n
+
+		if length < 0 {
+			log.Println("报文头错误")
+			c.handleError(packet.NewErrMsg([]byte("报文头错误")))
 			return
 		}
 
-		length := int(binary.BigEndian.Uint64(buf[8:16]))
-
-		log.Println(buf, "------------------------------------------")
-		for {
-			n, err = conn.Read(buf[:])
-			if err != nil {
-				log.Println(err.Error())
-				if err != io.EOF {
-					log.Println(err.Error())
-					conn.Close()
-					return
-				}
-
-				rPacket.ResetRPacket()
-				break
-			}
-			rPacket.Body = append(rPacket.Body, buf[:n]...)
-
-			length -= n
-
-			if length < 0 {
-				log.Println("报文头错误")
-				conn.Close()
-				return
-			}
-
-			if length == 0 {
-				log.Println(string(rPacket.Body))
-				rPacket.ResetRPacket()
-
-				// err := handle(conn, wPacket, 0, "Success 反馈信息")
-				// if err != nil {
-				// 	log.Println(err.Error())
-				// }
-				break
-			}
+		if length == 0 {
+			log.Println("Receive Data From Server: ", string(c.Buffer.Body[:]), len(string(c.Buffer.Body[:])))
+			return
 		}
 	}
 }
 
-func connect(service string) {
-	tcpAddr, err := net.ResolveTCPAddr("tcp", service)
-	checkFalt(err)
-
-	conn, err = net.DialTCP("tcp", nil, tcpAddr)
-	checkFalt(err)
+func (c *Client) handleError(errMsg *packet.ErrMsg) {
+	c.Send(&packet.Msg{ErrMsg: errMsg})
 }
 
-func Run(service string) {
-	log.SetFlags(log.Lshortfile | log.LstdFlags)
-	connect(service)
-	rPacket, wPacket = packet.PacketsCreation()
+func Connect(service string)(*net.TCPConn, error) {
+	var (
+		connection *net.TCPConn
+		address *net.TCPAddr
+		err error
+	)
 
-	handleSend(conn, wPacket)
-	handleRead(conn, rPacket)
+	address, err = net.ResolveTCPAddr("tcp", service)
+	if err != nil {
+		return nil, err
+	}
+
+	connection, err = net.DialTCP("tcp", nil, tcpAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	return connection, nil
+}
+
+// Read dispatches incoming messages
+func (c *Client) Read() {
+	err := c.parseHeader()
+	if err != nil {
+		log.Println(err.Error())
+		return
+	}
+
+	err = c.parseBody()
+	if err != nil {
+		log.Println(err.Error())
+		return
+	}
+
+	log.Println("Receive message: ", string(c.Buffer.Body[:]))
+}
+
+// Send Send msg to server
+func (c *Client) Send(msg *packet.Msg) {
+	c.Buffer = packet.RPacket()
+
+	buf, err := msg.Bytes()
+	if err != nil {
+		log.Println(err.Error())
+		return
+	}
+
+	c.Buffer.Body = append(c.Buffer.Body, buf[:]...)
+	c.Buffer.SetLength(uint64(len(c.Buffer.Body)))
+	log.Println(c.Buffer.Header)
+	n, err := c.conn.Write(append(c.Buffer.Header[:], buf[:]...))
+	if err != nil {
+		log.Println("Write: ", err.Error())
+		return
+	}
+
+	var msg2 packet.Msg
+	var buffer bytes.Buffer
+	decoder := gob.NewDecoder(&buffer)
+	if err := decoder.Decode(&msg); err != nil {
+		if err != io.EOF {
+			log.Println(err.Error())
+			return
+		}
+	}
+	log.Printf("Send %d string: %+v\n", n, msg2)
+}
+
+// Run Run
+func Run(service string) {
+	if err := Connect(service); err != nil {
+		log.Fatalln(err.Error())
+	}
+
+	defer func() {
+		if err := c.Close(); err != err {
+			log.Println(err.Error())
+		}
+	}()
+
+	c.Send(&packet.Msg{Message: "sanghai"})
+
+	// 	for {
+	// 		if err = c.Read(); err != nil {
+	// 			return err
+	// 		}
+	// 	}
 }
