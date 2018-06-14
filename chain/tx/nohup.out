@@ -1,0 +1,17 @@
+[12098:0614/144601:ERROR:browser_main_loop.cc(170)] Running without the SUID sandbox! See https://code.google.com/p/chromium/wiki/LinuxSUIDSandboxDevelopment for more information on developing with the sandbox on.
+Gtk-Message: 14:46:01.479: Failed to load module "canberra-gtk-module"
+[12098:0614/144603:INFO:CONSOLE(0)] "Document was loaded from Application Cache with manifest https://www.zybuluo.com/static/zybuluo.mdeditor.appcache", source: https://www.zybuluo.com/mdeditor (0)
+[12098:0614/144603:INFO:CONSOLE(0)] "Application Cache Checking event", source: https://www.zybuluo.com/mdeditor (0)
+[12098:0614/144604:INFO:CONSOLE(14)] ""misspelled option \"spellcheck\""", source: https://www.zybuluo.com/static/assets/mdeditor/0832e823.mdeditor.lib.min.js (14)
+[12098:0614/144604:INFO:CONSOLE(6)] ""openDatabase ..."", source: https://www.zybuluo.com/static/assets/288313bb.base.lib.min.js (6)
+[12098:0614/144604:INFO:CONSOLE(6)] ""openDatabase SUCCESS"", source: https://www.zybuluo.com/static/assets/288313bb.base.lib.min.js (6)
+[12098:0614/144606:INFO:CONSOLE(0)] "Application Cache NoUpdate event", source: https://www.zybuluo.com/mdeditor (0)
+[12098:0614/144606:INFO:CONSOLE(6)] ""SUCCESS: clear the login user!"", source: https://www.zybuluo.com/static/assets/288313bb.base.lib.min.js (6)
+[12098:0614/144606:INFO:CONSOLE(21)] ""Deprecation warning: moment construction falls back to js Date. This is discouraged and will be removed in upcoming major release. Please refer to https://github.com/moment/moment/issues/1407 for more info.\nArguments: [object Object]\nError\n    at Function.\u003Canonymous\u003E (https://www.zybuluo.com/static/editor/libs/mermaid/mermaid.min.js:21:4349)\n    at yt (https://www.zybuluo.com/static/editor/libs/mermaid/mermaid.min.js:21:12479)\n    at Nt (https://www.zybuluo.com/static/editor/libs/mermaid/mermaid.min.js:21:16386)\n    at It (https://www.zybuluo.com/static/editor/libs/mermaid/mermaid.min.js:21:16247)\n    at Ot (https://www.zybuluo.com/static/editor/libs/mermaid/mermaid.min.js:21:15967)\n    at Rt (https://www.zybuluo.com/static/editor/libs/mermaid/mermaid.min.js:21:16699)\n    at Pt (https://www.zybuluo.com/static/editor/libs/mermaid/mermaid.min.js:21:16733)\n    at n (https://www.zybuluo.com/static/editor/libs/mermaid/mermaid.min.js:21:1841)\n    at p (https://www.zybuluo.com/static/editor/libs/mermaid/mermaid.min.js:25:28175)\n    at r (https://www.zybuluo.com/static/editor/libs/mermaid/mermaid.min.js:25:30626)"", source: https://www.zybuluo.com/static/editor/libs/mermaid/mermaid.min.js (21)
+Gtk-Message: 14:54:22.678: Failed to load module "canberra-gtk-module"
+Created new window in existing browser session.
+[0614/145423:ERROR:nacl_helper_linux.cc(311)] NaCl helper process running without a sandbox!
+Most likely you need to configure your SUID sandbox correctly
+[12098:0614/152316:INFO:CONSOLE(4)] ""Cmd Markdown is going to be closed immediately."", source: https://www.zybuluo.com/static/assets/mdeditor/7daebaf5.mdeditor.min.js (4)
+[12098:0614/152316:WARNING:channel.cc(553)] Failed to send message to ack remove remote endpoint (local ID 1, remote ID 1)
+Parent failed to complete crash dump.

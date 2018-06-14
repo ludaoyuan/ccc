@@ -1,0 +1,10 @@
+// https://draveness.me/utxo-account-models
+// 比特币没有余额的概念 使用的是UTXO(为使用过的交易输出), 我们在交易过程中经常说的钱包余额，实际上是一个钱包地址的UTXO集合。
+// 在比特币网络中，存储比特币余额的是交易输出，准确点说就是未使用过的交易输出，而每一笔交易的输入实际上引用的是上一笔交易的输出。
+digraph transaction {
+    label="Bitcoin交易流程"
+	Vin[label="交易输入"]
+	Vout[label="交易输出"]
+}
+
+
