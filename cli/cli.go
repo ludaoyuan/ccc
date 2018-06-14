@@ -59,7 +59,7 @@ func (c *CLI) Height(args *Args, reply *BlockInfo) error {
 func Run() {
 	bc := blockchain.NewBlockchain()
 
-	c := CLI{bc}
+	c := &CLI{bc}
 	rpc.Register(c)
 
 	addr, err := net.ResolveTCPAddr("tcp", ":8080")
@@ -86,7 +86,7 @@ func Run() {
 func Run2() {
 	bc := blockchain.NewBlockchain()
 
-	c := CLI{bc}
+	c := &CLI{bc}
 	rpc.Register(c)
 
 	addr, err := net.ResolveTCPAddr("tcp", "127.0.0.1")

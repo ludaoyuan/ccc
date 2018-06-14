@@ -23,7 +23,7 @@ func initClient() {
 }
 
 func initClient2() {
-	client, err = jsonrpc.Dial("tcp", "127.0.0.1:8080")
+	client2, err = jsonrpc.Dial("tcp", "127.0.0.1:8080")
 	if err != nil {
 		log.Fatal(err.Error())
 	}
