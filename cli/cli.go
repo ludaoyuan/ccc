@@ -56,7 +56,7 @@ func (c *CLI) Height(args *Args, reply *BlockInfo) error {
 }
 
 // Run parses command line arguments and processes commands
-func Run() {
+func RunTcp() {
 	bc := blockchain.NewBlockchain()
 
 	c := &CLI{bc}
@@ -83,7 +83,7 @@ func Run() {
 }
 
 // jsonrpc
-func Run2() {
+func RunJson() {
 	bc := blockchain.NewBlockchain()
 
 	c := &CLI{bc}

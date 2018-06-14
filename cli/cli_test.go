@@ -29,7 +29,7 @@ func initClient2() {
 	}
 }
 
-func Init() *rcp.Client {
+func Init() *rpc.Client {
 	initClient()
 	initClient2()
 
