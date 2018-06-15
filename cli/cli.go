@@ -6,9 +6,10 @@ import (
 	"log"
 	"net"
 	"net/rpc"
-	"net/rpc/jsonrpc"
 	"os"
 )
+
+type handleBlock func(method string)
 
 type BlockInfo struct {
 	Height int64
@@ -17,7 +18,6 @@ type BlockInfo struct {
 
 type Args BlockInfo
 
-// CLI responsible for processing command line arguments
 type CLI struct {
 	BC *blockchain.Blockchain
 }
@@ -55,14 +55,13 @@ func (c *CLI) Height(args *Args, reply *BlockInfo) error {
 	return nil
 }
 
-// Run parses command line arguments and processes commands
-func RunTcp() {
+func Run() {
 	bc := blockchain.NewBlockchain()
 
 	c := &CLI{bc}
 	rpc.Register(c)
 
-	addr, err := net.ResolveTCPAddr("tcp", ":8080")
+	addr, err := net.ResolveTCPAddr("tcp", ":8081")
 	if err != nil {
 		log.Fatal(err.Error())
 	}
@@ -80,30 +79,4 @@ func RunTcp() {
 		rpc.ServeConn(conn)
 	}
 
-}
-
-// jsonrpc
-func RunJson() {
-	bc := blockchain.NewBlockchain()
-
-	c := &CLI{bc}
-	rpc.Register(c)
-
-	addr, err := net.ResolveTCPAddr("tcp", "127.0.0.1")
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-
-	listener, err := net.ListenTCP("tcp", addr)
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			continue
-		}
-		jsonrpc.ServeConn(conn)
-	}
 }
