@@ -38,6 +38,7 @@ type Transaction struct {
 }
 
 var genesisTransaction = &Transaction{
+	TxHash:   [32]byte{81, 122, 132, 80, 108, 208, 170, 237, 19, 15, 144, 202, 49, 32, 194, 73, 224, 56, 69, 168, 60, 125, 125, 192, 127, 85, 91, 95, 49, 134, 126, 159},
 	LockTime: 1531072238,
 	TxIn:     []*TxIn{genesisTxIn},
 	TxOut:    []*TxOut{genesisTxOut},

@@ -124,7 +124,6 @@ func (w Wallet) CreateTx(chain *core.Blockchain, to []byte, amount uint32, utxo 
 		return nil, err
 	}
 
-	log.Println(len(validOutputs), validOutputs)
 	// Build a list of inputs
 	for txid, outs := range validOutputs {
 		for _, out := range outs {
@@ -138,8 +137,6 @@ func (w Wallet) CreateTx(chain *core.Blockchain, to []byte, amount uint32, utxo 
 		outputs = append(outputs, &types.TxOut{acc - amount, pubKeyHash})
 	}
 
-	log.Println(len(inputs), *inputs[0])
-	log.Println(len(outputs), *outputs[0], *outputs[1])
 	tx := &types.Transaction{LockTime: uint32(time.Now().Unix()), TxIn: inputs, TxOut: outputs}
 	tx.TxHash, err = tx.Hash()
 	if err != nil {

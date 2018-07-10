@@ -1,1 +1,2 @@
+rm data/wallet.dat; cp data/wallet.dat_bck data/wallet.dat
 rm -rf src data/chain data/utxo; go build; ./src

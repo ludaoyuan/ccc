@@ -15,7 +15,7 @@ func (c *RPCClient) GenesisBlock(r *http.Request, args *types.Nil, reply *types.
 	// if err != nil {
 	// 	return err
 	// }
-
+	//
 	// log.Println(hex.EncodeToString(hash[:]))
 	// log.Println(hash)
 	return nil

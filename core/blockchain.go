@@ -202,7 +202,6 @@ func (bc *Blockchain) SignTransaction(tx *types.Transaction, privKey ecdsa.Priva
 		parentTxs[string(parentTx.TxHash[:])] = parentTx
 	}
 
-	log.Println(parentTxs)
 	tx.Sign(privKey, parentTxs)
 	return nil
 }
