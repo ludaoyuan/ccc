@@ -11,3 +11,10 @@ interactive (console) --> https://github.com/motemen/gore
 https://github.com/mkouhei/gosh
 
 Go REPL
+
+
+ISSUE:
+
+// address := hex.EncodeToString(wallet.GetAddress()) 
+address := fmt.Sprintf("%s", wallet.GetAddress())
+两种方法的区别, EncodeToString不是期待的结果

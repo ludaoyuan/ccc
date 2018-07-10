@@ -24,7 +24,7 @@ type RPCClient struct {
 func (c *RPCClient) Start() {
 	s := rpc.NewServer()
 	s.RegisterCodec(json2.NewCodec(), "application/json")
-	s.RegisterService(new(RPCClient), "")
+	s.RegisterService(c, "")
 
 	http.Handle("/", s)
 	// http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

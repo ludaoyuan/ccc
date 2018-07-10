@@ -18,7 +18,6 @@ import (
 )
 
 const version = byte(0x00)
-const walletFile = "./data/wallet.dat"
 const addressChecksumLen = 4
 
 // Wallet stores private and public keys
@@ -28,16 +27,30 @@ type Wallet struct {
 }
 
 // NewWallet creates and returns a Wallet
-func NewWallet() *Wallet {
-	private, public := newKeyPair()
+func NewWallet() (*Wallet, error) {
+	private, public, err := newKeyPair()
+	if err != nil {
+		log.Println(err.Error())
+		return nil, err
+	}
 	wallet := Wallet{private, public}
 
-	return &wallet
+	return &wallet, nil
+}
+
+func (w Wallet) PubKeyHash() ([]byte, error) {
+	return HashPubKey(w.PublicKey)
 }
 
 // GetAddress returns wallet address
-func (w Wallet) GetAddress() []byte {
-	pubKeyHash := HashPubKey(w.PublicKey)
+func (w Wallet) GetAddress() ([]byte, error) {
+	pubKeyHash, err := HashPubKey(w.PublicKey)
+	if err != nil {
+		log.Println(err.Error())
+		return nil, err
+	}
+	log.Println(hex.EncodeToString(w.PublicKey))
+	log.Println(pubKeyHash)
 
 	versionedPayload := append([]byte{version}, pubKeyHash...)
 	checksum := checksum(versionedPayload)
@@ -45,21 +58,22 @@ func (w Wallet) GetAddress() []byte {
 	fullPayload := append(versionedPayload, checksum...)
 	address := Base58Encode(fullPayload)
 
-	return address
+	return address, err
 }
 
 // HashPubKey hashes public key
-func HashPubKey(pubKey []byte) []byte {
+func HashPubKey(pubKey []byte) ([]byte, error) {
 	publicSHA256 := sha256.Sum256(pubKey)
 
 	RIPEMD160Hasher := ripemd160.New()
 	_, err := RIPEMD160Hasher.Write(publicSHA256[:])
 	if err != nil {
-		log.Panic(err)
+		log.Println(err.Error())
+		return nil, err
 	}
 	publicRIPEMD160 := RIPEMD160Hasher.Sum(nil)
 
-	return publicRIPEMD160
+	return publicRIPEMD160, nil
 }
 
 // ValidateAddress check if address if valid
@@ -81,24 +95,28 @@ func checksum(payload []byte) []byte {
 	return secondSHA[:addressChecksumLen]
 }
 
-func newKeyPair() (ecdsa.PrivateKey, []byte) {
+func newKeyPair() (ecdsa.PrivateKey, []byte, error) {
 	curve := elliptic.P256()
 	private, err := ecdsa.GenerateKey(curve, rand.Reader)
 	if err != nil {
-		log.Panic(err)
+		log.Println(err.Error())
+		return ecdsa.PrivateKey{}, nil, err
 	}
 	pubKey := append(private.PublicKey.X.Bytes(), private.PublicKey.Y.Bytes()...)
 
-	return *private, pubKey
+	return *private, pubKey, nil
 }
 
-// 创建交易
-func (w Wallet) CreateTx(chain *core.Blockchain, to []byte, amount uint32, utxos *core.UTXOSet) (*types.Transaction, error) {
-	var ins []*types.TxIn
-	var outs []*types.TxOut
+func (w Wallet) CreateTx(chain *core.Blockchain, to []byte, amount uint32, utxo *core.UTXOSet) (*types.Transaction, error) {
+	var inputs []*types.TxIn
+	var outputs []*types.TxOut
 
-	pubKeyHash := HashPubKey(w.PublicKey)
-	acc, validOuts := utxos.FindTxOutsOfAmount(pubKeyHash, amount)
+	pubKeyHash, err := HashPubKey(w.PublicKey)
+	if err != nil {
+		log.Println(err.Error())
+		return nil, err
+	}
+	acc, validOutputs := utxo.FindTxOutsOfAmount(pubKeyHash, amount)
 
 	if acc < amount {
 		err := errors.New("ERROR: Not enough funds")
@@ -106,33 +124,29 @@ func (w Wallet) CreateTx(chain *core.Blockchain, to []byte, amount uint32, utxos
 		return nil, err
 	}
 
-	for txid, outs := range validOuts {
-		idbytes, err := hex.DecodeString(txid)
-		if err != nil {
-			log.Println(err.Error())
-			return nil, err
-		}
-
+	log.Println(len(validOutputs), validOutputs)
+	// Build a list of inputs
+	for txid, outs := range validOutputs {
 		for _, out := range outs {
-			in := &types.TxIn{common.ToHash(idbytes), int64(out), [32]byte{}, common.ToHash(w.PublicKey)}
-			ins = append(ins, in)
+			input := &types.TxIn{common.ToHash32([]byte(txid)), int64(out), nil, pubKeyHash}
+			inputs = append(inputs, input)
 		}
 	}
 
-	from := w.GetAddress()
-	outs = append(outs, &types.TxOut{amount, common.ToHash(to)})
+	outputs = append(outputs, &types.TxOut{amount, to})
 	if acc > amount {
-		outs = append(outs, &types.TxOut{acc - amount, common.ToHash(from)}) // a change
+		outputs = append(outputs, &types.TxOut{acc - amount, pubKeyHash})
 	}
 
-	tx := types.Transaction{[32]byte{}, uint32(time.Now().Unix()), ins, outs}
-	var err error
+	log.Println(len(inputs), *inputs[0])
+	log.Println(len(outputs), *outputs[0], *outputs[1])
+	tx := &types.Transaction{LockTime: uint32(time.Now().Unix()), TxIn: inputs, TxOut: outputs}
 	tx.TxHash, err = tx.Hash()
 	if err != nil {
 		log.Println(err.Error())
 		return nil, err
 	}
-	chain.SignTransaction(&tx, w.PrivateKey)
+	chain.SignTransaction(tx, w.PrivateKey)
 
-	return &tx, nil
+	return tx, nil
 }

@@ -21,6 +21,10 @@ func (n *Node) Start() {
 // 	}
 // }
 
+// 钱包相关初始化
+func init() {
+}
+
 func NewNode() *Node {
 	return &Node{
 		rpc: rpc.NewRPCClient(),

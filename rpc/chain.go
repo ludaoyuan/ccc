@@ -1,14 +1,14 @@
 package rpc
 
 import (
-	"core"
 	"core/types"
+	"encoding/hex"
 	"log"
 	"net/http"
 )
 
 func (c *RPCClient) CreateBlockchain(r *http.Request, args *types.Nil, reply *types.Block) error {
-	block, err := core.CreateGenesisBlock()
+	block, err := c.chain.CreateGenesisBlock()
 	if err != nil {
 		log.Println(err.Error())
 		return err
@@ -35,7 +35,12 @@ func (c *RPCClient) GetBlockByNumber(r *http.Request, height *uint32, reply *typ
 }
 
 func (c *RPCClient) GetBlockByHash(r *http.Request, blockHashStr *string, reply *types.Block) error {
-	block, err := c.chain.GetBlockByHash([]byte(*blockHashStr))
+	blockhash, err := hex.DecodeString(*blockHashStr)
+	if err != nil {
+		return err
+	}
+	// block, err := c.chain.GetBlockByHash([]byte(*blockHashStr))
+	block, err := c.chain.GetBlockByHash(blockhash)
 	if err != nil {
 		log.Println(err.Error())
 		return err

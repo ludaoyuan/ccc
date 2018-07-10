@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/gob"
+	"fmt"
 	"log"
 	"time"
 )
@@ -24,11 +25,17 @@ type BlockHeader struct {
 }
 
 var genesisBlockHeader = &BlockHeader{
-	Height: 0,
-	// TODO:
-	// Hash:       common.NewHashFromStr2("00000000000000000000000000000000"),
-	// ParentHash: types.ZeroHash,
-	Timestamp: uint32(time.Now().Unix()),
+	Height:    1,
+	Hash:      [32]byte{99, 225, 50, 214, 10, 105, 129, 147, 159, 133, 141, 229, 188, 173, 237, 239, 76, 107, 60, 87, 51, 42, 14, 232, 177, 155, 140, 237, 161, 217, 169, 71},
+	Timestamp: 1531072238,
+}
+
+func (bh *BlockHeader) String() string {
+	return fmt.Sprintf("Height: %d, Hash: %s, ParentHash: %s, Timestamp: %d\n", bh.Height, bh.Hash, bh.ParentHash, bh.Timestamp)
+}
+
+func (bh *BlockHeader) IsGenesisBlock() bool {
+	return bh.Height == 1 && bh.ParentHash == ZeroHash
 }
 
 // 所有的这些类似函数,有没有必要做成统一接口(反射太慢)
@@ -43,6 +50,17 @@ func (bh *BlockHeader) EncodeToBytes() ([]byte, error) {
 	}
 
 	return buffer.Bytes(), nil
+}
+
+func (bh *BlockHeader) GenerateHash() ([32]byte, error) {
+	bhCopy := *bh
+	bhCopy.Hash = [32]byte{}
+	stream, err := bh.EncodeToBytes()
+	if err != nil {
+		log.Println(err.Error())
+		return [32]byte{}, err
+	}
+	return sha256.Sum256(stream), nil
 }
 
 func DecodeToBlockHeader(stream []byte) (*BlockHeader, error) {

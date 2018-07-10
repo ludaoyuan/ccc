@@ -20,7 +20,17 @@ func (c *RPCClient) ListWallets(r *http.Request, args *types.Nil, reply *WalletS
 
 // 新建钱包
 func (c *RPCClient) CreateWallet(r *http.Request, args *types.Nil, reply *string) error {
-	*reply = c.wallets.CreateWallet()
+	w, err := c.wallets.CreateWallet()
+	if err != nil {
+		return err
+	}
+
+	*reply = w
+
+	err = c.wallets.DumpWallet()
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

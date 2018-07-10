@@ -2,7 +2,6 @@ package core
 
 import (
 	"core/types"
-	"encoding/hex"
 	"log"
 
 	"github.com/syndtr/goleveldb/leveldb"
@@ -50,7 +49,7 @@ func (u UTXOSet) CreateUTXOSet() map[string]*types.TxOuts {
 		}
 
 		for _, tx := range block.Transactions {
-			txID := hex.EncodeToString(tx.TxHash[:])
+			txID := string(tx.TxHash[:])
 
 			for outIndex, _ := range tx.TxOut {
 				if stxos[txID] != nil {
@@ -68,7 +67,7 @@ func (u UTXOSet) CreateUTXOSet() map[string]*types.TxOuts {
 
 			if tx.IsCoinbase() == false {
 				for _, in := range tx.TxIn {
-					preOutTxID := hex.EncodeToString(in.ParentTxHash[:])
+					preOutTxID := string(in.ParentTxHash[:])
 					stxos[preOutTxID] = append(stxos[preOutTxID], in.ParentTxOutIndex)
 				}
 			}
@@ -90,7 +89,7 @@ func (u UTXOSet) MakeARaise(pubKeyHash []byte, amount uint32) (uint32, map[strin
 
 	iter := u.utxodb.NewIterator(nil, nil)
 	for iter.Next() {
-		txID := hex.EncodeToString(iter.Key())
+		txID := string(iter.Key())
 		outs, err := types.DecodeToTxOuts(iter.Value())
 		if err != nil {
 			log.Println(err.Error())
@@ -113,10 +112,7 @@ func (u UTXOSet) MakeARaise(pubKeyHash []byte, amount uint32) (uint32, map[strin
 func (u *UTXOSet) Reindex() {
 	utxos := u.CreateUTXOSet()
 	for txID, outs := range utxos {
-		txidStream, err := hex.DecodeString(txID)
-		if err != nil {
-			log.Println(err.Error())
-		}
+		txidStream := []byte(txID)
 
 		outsStream, err := outs.EncodeToBytes()
 		if err != nil {
@@ -261,7 +257,7 @@ func (u UTXOSet) FindTxOutsOfAmount(pubkeyHash []byte, amount uint32) (uint32, m
 	defer iter.Release()
 
 	for iter.Next() {
-		txID := hex.EncodeToString(iter.Key())
+		txID := string(iter.Key())
 		outs, err := types.DecodeToTxOuts(iter.Value())
 		if err != nil {
 			log.Println(err.Error())

@@ -4,13 +4,15 @@ import (
 	"common"
 	"core/types"
 	"crypto/ecdsa"
+	"errors"
 	"log"
 	"net/http"
+	"wallet"
 )
 
 // 获取交易
 func (c *RPCClient) GetTransaction(r *http.Request, txhash *string, reply *types.Transaction) error {
-	hash := common.ToHash([]byte(*txhash))
+	hash := common.ToHash32([]byte(*txhash))
 	tx, err := c.chain.FindTransaction(hash)
 	if err != nil {
 		log.Println(err.Error())
@@ -43,26 +45,26 @@ type SendTransactionCmd struct {
 }
 
 func (c *RPCClient) SendTransaction(r *http.Request, args *SendTransactionCmd, reply *types.Nil) error {
-	// if !wallet.ValidateAddress(args.From) {
-	// 	err := errors.New("ERROR: Sender address is not valid")
-	// 	log.Println(err.Error())
-	// 	return err
-	// }
-	// if !wallet.ValidateAddress(args.To) {
-	// 	err := errors.New("ERROR: Reciever address is not valid")
-	// 	log.Println(err.Error())
-	// 	return err
-	// }
-	//
-	// w := c.wallets.GetWallet(args.From)
-	//
-	// tx, err := w.CreateTx(c.chain, []byte(args.To), args.Value, c.utxo)
-	// if err != nil {
-	// 	log.Println(err.Error())
-	// 	return err
-	// }
-	//
-	// // TODO:
-	// // tx.TxIn :=
-	return nil
+	if !wallet.ValidateAddress(args.From) {
+		err := errors.New("ERROR: Sender address is not valid")
+		log.Println(err.Error())
+		return err
+	}
+	if !wallet.ValidateAddress(args.To) {
+		err := errors.New("ERROR: Reciever address is not valid")
+		log.Println(err.Error())
+		return err
+	}
+
+	w := c.wallets.GetWallet(args.From)
+
+	tx, err := w.CreateTx(c.chain, []byte(args.To), args.Value, c.utxo)
+	if err != nil {
+		log.Println(err.Error())
+		return err
+	}
+
+	// TODO:
+	// 网络打通以后就是send, 目前是直接本地处理
+	return c.chain.MineBlock(w.PublicKey, types.Transactions{tx}, c.utxo)
 }

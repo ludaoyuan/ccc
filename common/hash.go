@@ -94,7 +94,7 @@ func Decode(dst *Hash, src string) error {
 	return nil
 }
 
-func ToHash(hash []byte) [32]byte {
+func ToHash32(hash []byte) [32]byte {
 	var key [32]byte
 	copy(key[:], hash)
 	return key

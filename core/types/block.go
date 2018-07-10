@@ -9,7 +9,7 @@ import (
 
 type Block struct {
 	// 区块头
-	header *BlockHeader
+	Header *BlockHeader
 	// 交易
 	Transactions Transactions
 	// 区块大小
@@ -17,7 +17,7 @@ type Block struct {
 }
 
 var GenesisBlock = &Block{
-	header: genesisBlockHeader,
+	Header: genesisBlockHeader,
 	// Transactions: make(Transactions, 1),
 	Transactions: Transactions{genesisTransaction},
 }
@@ -45,16 +45,24 @@ func DecodeToBlock(blockBytes []byte) (*Block, error) {
 	return &block, nil
 }
 
+func (b *Block) IsGenesisBlock() bool {
+	return b.Header.IsGenesisBlock()
+}
+
 func (b *Block) ParentHash() [32]byte {
-	return b.header.ParentHash
+	return b.Header.ParentHash
+}
+
+func (b *Block) GenerateHash() ([32]byte, error) {
+	return b.Header.GenerateHash()
 }
 
 func (b *Block) Hash() [32]byte {
-	return b.header.Hash
+	return b.Header.Hash
 }
 
 func (b *Block) Height() uint32 {
-	return b.header.Height
+	return b.Header.Height
 }
 
 // 创世区块
@@ -71,14 +79,9 @@ func NewBlock(txs []*Transaction, parentHash [32]byte, parentHeight uint32) (*Bl
 	}
 
 	return &Block{
-		header:       header,
+		Header:       header,
 		Transactions: txs,
 	}, nil
-}
-
-func DoubleHash(stream []byte) [32]byte {
-	hash := sha256.Sum256(stream[:])
-	return sha256.Sum256(hash[:])
 }
 
 func (b *Block) HashTransactions() ([32]byte, error) {
@@ -93,7 +96,7 @@ func (b *Block) HashTransactions() ([32]byte, error) {
 		}
 		txHashes = append(txHashes, hash[:])
 	}
-	txHash = DoubleHash(bytes.Join(txHashes, []byte{}))
+	txHash = sha256.Sum256(bytes.Join(txHashes, []byte{}))
 
 	return txHash, nil
 }

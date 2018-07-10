@@ -7,7 +7,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/gob"
-	"encoding/hex"
 	"errors"
 	"log"
 	"math/big"
@@ -17,7 +16,7 @@ import (
 // 创建交易
 // 验证交易
 
-const Subsidy = 125
+const Subsidy = 25
 const HashSize = 32
 const genesisTimestamp = 1530603941
 
@@ -45,7 +44,7 @@ var genesisTransaction = &Transaction{
 }
 
 // 币基交易没有输入
-func CreateCoinbaseTX(to [32]byte) (*Transaction, error) {
+func CreateCoinbaseTX(to []byte) (*Transaction, error) {
 	tx := NewTx()
 
 	tx.AddTxIn(&TxIn{
@@ -76,7 +75,7 @@ func (tx Transaction) TrimmedCopy() *Transaction {
 	var outs []*TxOut
 
 	for _, in := range tx.TxIn {
-		ins = append(ins, &TxIn{in.ParentTxHash, in.ParentTxOutIndex, ZeroHash, ZeroHash})
+		ins = append(ins, &TxIn{in.ParentTxHash, in.ParentTxOutIndex, nil, nil})
 	}
 
 	for _, out := range tx.TxOut {
@@ -95,7 +94,7 @@ func (tx *Transaction) Sign(sig ecdsa.PrivateKey, parentTxs map[string]*Transact
 	}
 
 	for _, in := range tx.TxIn {
-		if parentTxs[hex.EncodeToString(in.ParentTxHash[:])].TxHash == ZeroHash {
+		if parentTxs[string(in.ParentTxHash[:])].TxHash == ZeroHash {
 			err := errors.New("ERROR: preious Transaction error")
 			log.Println(err.Error())
 			return err
@@ -106,15 +105,15 @@ func (tx *Transaction) Sign(sig ecdsa.PrivateKey, parentTxs map[string]*Transact
 
 	var err error
 	for inID, in := range txCopy.TxIn {
-		preTx := parentTxs[hex.EncodeToString(in.ParentTxHash[:])]
-		txCopy.TxIn[inID].SignatureKey = ZeroHash
+		preTx := parentTxs[string(in.ParentTxHash[:])]
+		txCopy.TxIn[inID].SignatureKey = nil
 		txCopy.TxIn[inID].PubKeyHash = preTx.TxOut[in.ParentTxOutIndex].PubKeyHash
 		txCopy.TxHash, err = txCopy.Hash()
 		if err != nil {
 			log.Println(err.Error())
 			return err
 		}
-		txCopy.TxIn[inID].PubKeyHash = ZeroHash
+		txCopy.TxIn[inID].PubKeyHash = nil
 
 		r, s, err := ecdsa.Sign(rand.Reader, &sig, txCopy.TxHash[:])
 		if err != nil {
@@ -132,8 +131,7 @@ func (tx *Transaction) Verify(parentTxs map[string]*Transaction) bool {
 		return true
 	}
 	for _, in := range tx.TxIn {
-		if parentTxs[hex.EncodeToString(in.ParentTxHash[:])].TxHash == ZeroHash {
-			log.Println("Zero")
+		if parentTxs[string(in.ParentTxHash[:])].TxHash == ZeroHash {
 			return false
 		}
 	}
@@ -143,15 +141,15 @@ func (tx *Transaction) Verify(parentTxs map[string]*Transaction) bool {
 
 	var err error
 	for inID, in := range tx.TxIn {
-		preTx := parentTxs[hex.EncodeToString(in.ParentTxHash[:])]
-		txCopy.TxIn[inID].SignatureKey = ZeroHash
+		preTx := parentTxs[string(in.ParentTxHash[:])]
+		txCopy.TxIn[inID].SignatureKey = nil
 		txCopy.TxIn[inID].PubKeyHash = preTx.TxOut[in.ParentTxOutIndex].PubKeyHash
 		txCopy.TxHash, err = txCopy.Hash()
 		if err != nil {
 			log.Println(err.Error())
 			return false
 		}
-		txCopy.TxIn[inID].PubKeyHash = ZeroHash
+		txCopy.TxIn[inID].PubKeyHash = nil
 
 		r := big.Int{}
 		s := big.Int{}

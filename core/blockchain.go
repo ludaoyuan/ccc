@@ -3,16 +3,17 @@ package core
 import (
 	"core/types"
 	"crypto/ecdsa"
-	"encoding/hex"
 	"errors"
 	"log"
 	"sync"
 
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/filter"
+	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
 const (
-	chainPath           = "./data/chaindb"
+	chainPath           = "./data/chain"
 	genesisCoinbaseData = "Inc Block Chain Start at 2018/7/3"
 )
 
@@ -27,9 +28,7 @@ type Blockchain struct {
 	chaindb         *leveldb.DB
 }
 
-func CreateGenesisBlock() (*types.Block, error) {
-	chain := NewBlockchain()
-
+func (bc *Blockchain) CreateGenesisBlock() (*types.Block, error) {
 	genesisHash := types.GenesisBlock.Hash()
 
 	genesisBlockStream, err := types.GenesisBlock.EncodeToBytes()
@@ -38,7 +37,9 @@ func CreateGenesisBlock() (*types.Block, error) {
 		return nil, err
 	}
 
-	err = chain.chaindb.Put(genesisHash[:], genesisBlockStream, nil)
+	// log.Println(string(genesisHash[:]))
+	// log.Println(string(genesisBlockStream))
+	err = bc.chaindb.Put(genesisHash[:], genesisBlockStream, nil)
 	if err != nil {
 		log.Println(err.Error())
 		return nil, err
@@ -47,7 +48,13 @@ func CreateGenesisBlock() (*types.Block, error) {
 }
 
 func NewBlockchain() *Blockchain {
-	chaindb, err := leveldb.OpenFile(chainPath, nil)
+	opts := opt.Options{
+		ErrorIfExist: false,
+		Strict:       opt.DefaultStrict,
+		Compression:  opt.NoCompression,
+		Filter:       filter.NewBloomFilter(10),
+	}
+	chaindb, err := leveldb.OpenFile(chainPath, &opts)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
@@ -59,21 +66,11 @@ func NewBlockchain() *Blockchain {
 		lastBlock:       types.GenesisBlock,
 	}
 
-	chain.Init()
+	chain.hbLock.Lock()
+	chain.heightHashCache[chain.lastBlock.Height()] = chain.lastBlock.Hash()
+	chain.hbLock.Unlock()
 
 	return chain
-}
-
-func (bc *Blockchain) Iterator() *BlockchainIterator {
-	bci := &BlockchainIterator{bc.lastBlock.Hash(), bc.chaindb, nil, nil}
-
-	return bci
-}
-
-func (bc *Blockchain) Init() {
-	bc.hbLock.Lock()
-	bc.heightHashCache[bc.lastBlock.Height()] = bc.lastBlock.Hash()
-	bc.hbLock.Unlock()
 }
 
 // 获取高度
@@ -96,7 +93,7 @@ func (bc *Blockchain) GetBlockByNumber(height uint32) (*types.Block, error) {
 }
 
 func (bc *Blockchain) GetBlockByHash(blockhash []byte) (*types.Block, error) {
-	blockStream, err := bc.chaindb.Get(blockhash[:], nil)
+	blockStream, err := bc.chaindb.Get(blockhash, nil)
 	if err != nil {
 		log.Println(err.Error())
 		return nil, err
@@ -135,17 +132,12 @@ func (bc *Blockchain) AddBlock(tx *types.Transaction) error {
 func (bc *Blockchain) InitUTXOSet() (map[string]*types.TxOuts, error) {
 	UTXO := make(map[string]*types.TxOuts)
 	stxos := make(map[string][]int64)
-	iter := bc.chaindb.NewIterator(nil, nil)
-	// bci := bc.Iterator()
+	iter := NewBlockchainIterator(bc.chaindb, bc.lastBlock.Hash())
 
 	for iter.Next() {
-		block, err := types.DecodeToBlock(iter.Value())
-		if err != nil {
-			log.Println(err.Error())
-			return nil, err
-		}
+		block := iter.Value()
 		for _, tx := range block.Transactions {
-			txID := hex.EncodeToString(tx.TxHash[:])
+			txID := string(tx.TxHash[:])
 
 		Outputs:
 			for outIdx, out := range tx.TxOut {
@@ -157,20 +149,21 @@ func (bc *Blockchain) InitUTXOSet() (map[string]*types.TxOuts, error) {
 					}
 				}
 
-				outs := UTXO[txID]
+				// outs := UTXO[txID]
+				var outs types.TxOuts
 				outs.Outs = append(outs.Outs, out)
-				UTXO[txID] = outs
+				UTXO[txID] = &outs
 			}
 
 			if tx.IsCoinbase() == false {
 				for _, in := range tx.TxIn {
-					inTxID := hex.EncodeToString(in.ParentTxHash[:])
+					inTxID := string(in.ParentTxHash[:])
 					stxos[inTxID] = append(stxos[inTxID], in.ParentTxOutIndex)
 				}
 			}
 		}
 
-		if len(block.ParentHash()) == 0 {
+		if block.IsGenesisBlock() == true {
 			break
 		}
 	}
@@ -179,10 +172,10 @@ func (bc *Blockchain) InitUTXOSet() (map[string]*types.TxOuts, error) {
 }
 
 func (bc *Blockchain) FindTransaction(txHash [32]byte) (*types.Transaction, error) {
-	bci := bc.Iterator()
+	bci := NewBlockchainIterator(bc.chaindb, bc.lastBlock.Hash())
 
 	for bci.Next() {
-		block := bci.Value
+		block := bci.Value()
 
 		tx := block.FindTransaction(txHash)
 		if tx != nil {
@@ -206,9 +199,10 @@ func (bc *Blockchain) SignTransaction(tx *types.Transaction, privKey ecdsa.Priva
 			log.Println(err.Error())
 			return err
 		}
-		parentTxs[hex.EncodeToString(parentTx.TxHash[:])] = parentTx
+		parentTxs[string(parentTx.TxHash[:])] = parentTx
 	}
 
+	log.Println(parentTxs)
 	tx.Sign(privKey, parentTxs)
 	return nil
 }
@@ -226,46 +220,40 @@ func (bc *Blockchain) VerifyTransaction(tx *types.Transaction) bool {
 			log.Println(err.Error())
 			return false
 		}
-		ParentTxs[hex.EncodeToString(ParentTx.TxHash[:])] = ParentTx
+		ParentTxs[string(ParentTx.TxHash[:])] = ParentTx
 	}
 
 	return tx.Verify(ParentTxs)
 }
 
-func (bc *Blockchain) MineBlock(minerAddr []byte, txs types.Transactions, utxo *UTXOSet) (*types.Block, error) {
+func (bc *Blockchain) MineBlock(minerAddr []byte, txs types.Transactions, utxo *UTXOSet) error {
 	// 更新状态信息
-	bc.hbLock.Lock()
-
 	for _, tx := range txs {
 		if bc.VerifyTransaction(tx) != true {
 			err := errors.New("ERROR: Invalid transaction")
 			log.Println(err.Error())
-			bc.hbLock.Unlock()
-			return nil, err
+			return err
 		}
 	}
 
 	newBlock, err := types.NewBlock(txs, bc.lastBlock.Hash(), bc.lastBlock.Height()+1)
 	if err != nil {
 		log.Println(err.Error())
-		bc.hbLock.Unlock()
-		return nil, err
+		return err
 	}
 
 	// 更新数据库
 	stream, err := newBlock.EncodeToBytes()
 	if err != nil {
 		log.Println(err.Error())
-		bc.hbLock.Unlock()
-		return nil, err
+		return err
 	}
 
 	key := newBlock.Hash()
 	err = bc.chaindb.Put(key[:], stream, nil)
 	if err != nil {
 		log.Println(err.Error())
-		bc.hbLock.Unlock()
-		return nil, err
+		return err
 	}
 
 	err = utxo.UpdateByBlock(newBlock)
@@ -274,13 +262,35 @@ func (bc *Blockchain) MineBlock(minerAddr []byte, txs types.Transactions, utxo *
 		key := newBlock.Hash()
 		bc.chaindb.Delete(key[:], nil)
 
-		bc.hbLock.Unlock()
-		return nil, err
+		return err
 	}
 
+	err = bc.DumpDB(newBlock)
+	if err != nil {
+		log.Println(err.Error())
+		return err
+	}
+
+	return nil
+}
+
+func (bc *Blockchain) DumpDB(newBlock *types.Block) error {
+	bc.hbLock.Lock()
+	newhash := newBlock.Hash()
 	bc.lastBlock = newBlock
-	bc.heightHashCache[newBlock.Height()] = newBlock.Hash()
+	bc.heightHashCache[newBlock.Height()] = newhash
 	bc.hbLock.Unlock()
 
-	return newBlock, nil
+	value, err := newBlock.EncodeToBytes()
+	if err != nil {
+		log.Println(err.Error())
+		return err
+	}
+
+	err = bc.chaindb.Put(newhash[:], value, nil)
+	if err != nil {
+		log.Println(err.Error())
+		return err
+	}
+	return nil
 }

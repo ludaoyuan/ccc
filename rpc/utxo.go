@@ -8,9 +8,16 @@ import (
 )
 
 // 列出某一个地址所有的UTXO
-func (c *RPCClient) ListUTXOsByKey(r *http.Request, args *string, reply *types.TxOuts) error {
+func (c *RPCClient) ListUTXOsByKey(r *http.Request, address *string, reply *types.TxOuts) error {
 	var err error
+	w := c.wallets.GetWallet(*address)
+	pubkeyhash, err := w.PubKeyHash()
+	if err != nil {
+		log.Println(err.Error())
+		return err
+	}
 
+	// TODO: 初始化移到程序启动初始化程序中
 	utxo, err := c.chain.InitUTXOSet()
 	if err != nil {
 		log.Println(err.Error())
@@ -23,7 +30,7 @@ func (c *RPCClient) ListUTXOsByKey(r *http.Request, args *string, reply *types.T
 		return err
 	}
 
-	utxos, err := c.utxo.FindUTXOs([]byte(*args))
+	utxos, err := c.utxo.FindUTXOs(pubkeyhash)
 	if err != nil {
 		log.Println(err.Error())
 		return err

@@ -2,14 +2,15 @@ package wallet
 
 import (
 	"bytes"
+	"common"
 	"crypto/elliptic"
 	"encoding/gob"
-	"encoding/hex"
-	"io"
+	"fmt"
 	"io/ioutil"
 	"log"
-	"os"
 )
+
+const walletFile = "./data/wallet.dat"
 
 // Wallets stores a collection of wallets
 type Wallets struct {
@@ -21,19 +22,29 @@ func NewWallets() (*Wallets, error) {
 	wallets := Wallets{}
 	wallets.Wallets = make(map[string]*Wallet)
 
-	err := wallets.LoadFromFile()
+	err := wallets.LoadWallet()
 
 	return &wallets, err
 }
 
 // CreateWallet adds a Wallet to Wallets
-func (ws *Wallets) CreateWallet() string {
-	wallet := NewWallet()
-	address := hex.EncodeToString(wallet.GetAddress())
+func (ws *Wallets) CreateWallet() (string, error) {
+	wallet, err := NewWallet()
+	if err != nil {
+		log.Println(err.Error())
+		return "", err
+	}
+
+	hashPubKey, err := wallet.GetAddress()
+	if err != nil {
+		log.Println(err.Error())
+		return "", err
+	}
+	address := fmt.Sprintf("%s", hashPubKey)
 
 	ws.Wallets[address] = wallet
 
-	return address
+	return address, nil
 }
 
 // GetAddresses returns an array of addresses stored in the wallet file
@@ -47,24 +58,20 @@ func (ws *Wallets) GetAddresses() []string {
 	return addresses
 }
 
-// GetWallet returns a Wallet by its address
 func (ws Wallets) GetWallet(address string) Wallet {
 	return *ws.Wallets[address]
 }
 
-// LoadFromFile loads wallets from the file
-func (ws *Wallets) LoadFromFile() error {
-	if _, err := os.Stat(walletFile); os.IsNotExist(err) {
-		log.Println(err.Error())
-		return err
+func (ws *Wallets) LoadWallet() error {
+	exists := common.CheckPath(walletFile)
+	if !exists {
+		return nil
 	}
 
 	fileContent, err := ioutil.ReadFile(walletFile)
 	if err != nil {
-		if err == io.EOF {
-			return nil
-		}
-		log.Panic(err)
+		log.Println(err)
+		return err
 	}
 
 	var wallets Wallets
@@ -72,7 +79,8 @@ func (ws *Wallets) LoadFromFile() error {
 	decoder := gob.NewDecoder(bytes.NewReader(fileContent))
 	err = decoder.Decode(&wallets)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Println(err)
+		return err
 	}
 
 	ws.Wallets = wallets.Wallets
@@ -80,8 +88,7 @@ func (ws *Wallets) LoadFromFile() error {
 	return nil
 }
 
-// SaveToFile saves wallets to a file
-func (ws Wallets) SaveToFile() {
+func (ws Wallets) DumpWallet() error {
 	var content bytes.Buffer
 
 	gob.Register(elliptic.P256())
@@ -89,11 +96,14 @@ func (ws Wallets) SaveToFile() {
 	encoder := gob.NewEncoder(&content)
 	err := encoder.Encode(ws)
 	if err != nil {
-		log.Panic(err)
+		log.Println(err)
+		return err
 	}
 
 	err = ioutil.WriteFile(walletFile, content.Bytes(), 0644)
 	if err != nil {
-		log.Panic(err)
+		log.Println(err)
+		return err
 	}
+	return nil
 }

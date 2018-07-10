@@ -9,13 +9,13 @@ import (
 type TxOut struct {
 	// 单位聪
 	Value      uint32
-	PubKeyHash [32]byte
+	PubKeyHash []byte
 }
 
 // TODO: 第一个地址
 var genesisTxOut = &TxOut{
-	Value: Subsidy,
-	// PubKeyHash: [32]byte(""),
+	Value:      Subsidy,
+	PubKeyHash: []byte{105, 197, 202, 132, 29, 223, 157, 165, 31, 193, 245, 40, 157, 167, 253, 183, 171, 119, 47, 183},
 }
 
 func (out *TxOut) IsLockedWithKey(pubKeyHash []byte) bool {

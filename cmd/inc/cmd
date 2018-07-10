@@ -1,0 +1,3 @@
+ # curl -X POST -H "Content-Type:application/json" -d '{"jsonrpc":"2.0", "method":"RPCClient.GetBlockCount","params":{},"id":1}' http://localhost:8080
+ # curl -X POST -H "Content-Type:application/json" -d '{"jsonrpc":"2.0", "method":"RPCClient.CreateBlockchain","params":{},"id":1}' http://localhost:8080
+ curl -X POST -H "Content-Type:application/json" -d '{"jsonrpc":"2.0", "method":"RPCClient.CreateWallet","params":{},"id":1}' http://localhost:8080
