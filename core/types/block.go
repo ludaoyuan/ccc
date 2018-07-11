@@ -17,8 +17,7 @@ type Block struct {
 }
 
 var GenesisBlock = &Block{
-	Header: genesisBlockHeader,
-	// Transactions: make(Transactions, 1),
+	Header:       genesisBlockHeader,
 	Transactions: Transactions{genesisTransaction},
 }
 

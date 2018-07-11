@@ -49,8 +49,6 @@ func (w Wallet) GetAddress() ([]byte, error) {
 		log.Println(err.Error())
 		return nil, err
 	}
-	log.Println(hex.EncodeToString(w.PublicKey))
-	log.Println(pubKeyHash)
 
 	versionedPayload := append([]byte{version}, pubKeyHash...)
 	checksum := checksum(versionedPayload)
@@ -111,7 +109,7 @@ func (w Wallet) CreateTx(chain *core.Blockchain, to []byte, amount uint32, utxo 
 	var inputs []*types.TxIn
 	var outputs []*types.TxOut
 
-	pubKeyHash, err := HashPubKey(w.PublicKey)
+	pubKeyHash, err := w.PubKeyHash()
 	if err != nil {
 		log.Println(err.Error())
 		return nil, err
@@ -119,22 +117,28 @@ func (w Wallet) CreateTx(chain *core.Blockchain, to []byte, amount uint32, utxo 
 	acc, validOutputs := utxo.FindTxOutsOfAmount(pubKeyHash, amount)
 
 	if acc < amount {
-		err := errors.New("ERROR: Not enough funds")
+		err := errors.New("ERROR: Insufficient balance")
 		log.Println(err.Error())
 		return nil, err
 	}
 
-	// Build a list of inputs
-	for txid, outs := range validOutputs {
+	for txhashstr, outs := range validOutputs {
+		txhash, _ := hex.DecodeString(txhashstr)
 		for _, out := range outs {
-			input := &types.TxIn{common.ToHash32([]byte(txid)), int64(out), nil, pubKeyHash}
+			input := &types.TxIn{common.ToHash32(txhash), int64(out), nil, w.PublicKey}
 			inputs = append(inputs, input)
 		}
 	}
 
+	myAddr, err := w.GetAddress()
+	if err != nil {
+		log.Println(err.Error())
+		return nil, err
+	}
+
 	outputs = append(outputs, &types.TxOut{amount, to})
 	if acc > amount {
-		outputs = append(outputs, &types.TxOut{acc - amount, pubKeyHash})
+		outputs = append(outputs, &types.TxOut{acc - amount, myAddr})
 	}
 
 	tx := &types.Transaction{LockTime: uint32(time.Now().Unix()), TxIn: inputs, TxOut: outputs}

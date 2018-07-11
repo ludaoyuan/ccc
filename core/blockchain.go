@@ -37,8 +37,6 @@ func (bc *Blockchain) CreateGenesisBlock() (*types.Block, error) {
 		return nil, err
 	}
 
-	// log.Println(string(genesisHash[:]))
-	// log.Println(string(genesisBlockStream))
 	err = bc.chaindb.Put(genesisHash[:], genesisBlockStream, nil)
 	if err != nil {
 		log.Println(err.Error())
@@ -137,27 +135,27 @@ func (bc *Blockchain) InitUTXOSet() (map[string]*types.TxOuts, error) {
 	for iter.Next() {
 		block := iter.Value()
 		for _, tx := range block.Transactions {
-			txID := string(tx.TxHash[:])
+			txHash := tx.TxHashString()
 
 		Outputs:
 			for outIdx, out := range tx.TxOut {
-				if stxos[txID] != nil {
-					for _, stxoindex := range stxos[txID] {
+				if stxos[txHash] != nil {
+					for _, stxoindex := range stxos[txHash] {
 						if int(stxoindex) == outIdx {
 							continue Outputs
 						}
 					}
 				}
 
-				// outs := UTXO[txID]
+				// outs := UTXO[txHash]
 				var outs types.TxOuts
 				outs.Outs = append(outs.Outs, out)
-				UTXO[txID] = &outs
+				UTXO[txHash] = &outs
 			}
 
 			if tx.IsCoinbase() == false {
 				for _, in := range tx.TxIn {
-					inTxID := string(in.ParentTxHash[:])
+					inTxID := in.ParentHashString()
 					stxos[inTxID] = append(stxos[inTxID], in.ParentTxOutIndex)
 				}
 			}
@@ -199,7 +197,7 @@ func (bc *Blockchain) SignTransaction(tx *types.Transaction, privKey ecdsa.Priva
 			log.Println(err.Error())
 			return err
 		}
-		parentTxs[string(parentTx.TxHash[:])] = parentTx
+		parentTxs[parentTx.TxHashString()] = parentTx
 	}
 
 	tx.Sign(privKey, parentTxs)
@@ -211,18 +209,39 @@ func (bc *Blockchain) VerifyTransaction(tx *types.Transaction) bool {
 		return true
 	}
 
-	ParentTxs := make(map[string]*types.Transaction)
+	parentTxs := make(map[string]*types.Transaction)
 
 	for _, in := range tx.TxIn {
-		ParentTx, err := bc.FindTransaction(in.ParentTxHash)
+		parentTx, err := bc.FindTransaction(in.ParentTxHash)
 		if err != nil {
 			log.Println(err.Error())
 			return false
 		}
-		ParentTxs[string(ParentTx.TxHash[:])] = ParentTx
+
+		if parentTx.Nil() {
+			log.Println("Parent Tx Hash Is NIL")
+			return false
+		}
+		parentTxs[parentTx.TxHashString()] = parentTx
 	}
 
-	return tx.Verify(ParentTxs)
+	return tx.Verify(parentTxs)
+}
+
+func (bc *Blockchain) Get(key []byte) error {
+	v, err := bc.chaindb.Get(key, nil)
+	if err != nil {
+		log.Println(err.Error())
+		return err
+	}
+
+	b, err := types.DecodeToBlock(v)
+	if err != nil {
+		log.Println(err.Error())
+		return err
+	}
+
+	log.Println(*b)
 }
 
 func (bc *Blockchain) MineBlock(minerAddr []byte, txs types.Transactions, utxo *UTXOSet) error {

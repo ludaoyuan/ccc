@@ -2,6 +2,7 @@ package core
 
 import (
 	"core/types"
+	"encoding/hex"
 	"log"
 
 	"github.com/syndtr/goleveldb/leveldb"
@@ -49,26 +50,26 @@ func (u UTXOSet) CreateUTXOSet() map[string]*types.TxOuts {
 		}
 
 		for _, tx := range block.Transactions {
-			txID := string(tx.TxHash[:])
+			txhash := hex.EncodeToString(tx.TxHash[:])
 
 			for outIndex, _ := range tx.TxOut {
-				if stxos[txID] != nil {
-					for _, stxoIndex := range stxos[txID] {
+				if stxos[txhash] != nil {
+					for _, stxoIndex := range stxos[txhash] {
 						if int(stxoIndex) == outIndex {
 							continue
 						}
 					}
 				}
 
-				outs := utxos[txID]
+				outs := utxos[txhash]
 				outs.Outs = append(outs.Outs, tx.TxOut[outIndex])
-				utxos[txID] = outs
+				utxos[txhash] = outs
 			}
 
 			if tx.IsCoinbase() == false {
 				for _, in := range tx.TxIn {
-					preOutTxID := string(in.ParentTxHash[:])
-					stxos[preOutTxID] = append(stxos[preOutTxID], in.ParentTxOutIndex)
+					parentTxHash := in.ParentHashString()
+					stxos[parentTxHash] = append(stxos[parentTxHash], in.ParentTxOutIndex)
 				}
 			}
 		}
@@ -89,7 +90,7 @@ func (u UTXOSet) MakeARaise(pubKeyHash []byte, amount uint32) (uint32, map[strin
 
 	iter := u.utxodb.NewIterator(nil, nil)
 	for iter.Next() {
-		txID := string(iter.Key())
+		txhash := hex.EncodeToString(iter.Key())
 		outs, err := types.DecodeToTxOuts(iter.Value())
 		if err != nil {
 			log.Println(err.Error())
@@ -99,7 +100,7 @@ func (u UTXOSet) MakeARaise(pubKeyHash []byte, amount uint32) (uint32, map[strin
 		for outIndex, out := range outs.Outs {
 			if out.IsLockedWithKey(pubKeyHash) && acc < amount {
 				acc += out.Value
-				raise[txID] = append(raise[txID], outIndex)
+				raise[txhash] = append(raise[txhash], outIndex)
 			}
 		}
 	}
@@ -109,23 +110,28 @@ func (u UTXOSet) MakeARaise(pubKeyHash []byte, amount uint32) (uint32, map[strin
 }
 
 // 重建UTXO集合, TODO: 判断是否存在,存在先删除
-func (u *UTXOSet) Reindex() {
+func (u *UTXOSet) Reindex() error {
 	utxos := u.CreateUTXOSet()
-	for txID, outs := range utxos {
-		txidStream := []byte(txID)
+	for txhash, outs := range utxos {
+		txidStream, err := hex.DecodeString(txhash)
+		if err != nil {
+			log.Println(err.Error())
+			return err
+		}
 
 		outsStream, err := outs.EncodeToBytes()
 		if err != nil {
 			log.Println(err.Error())
-			continue
+			return err
 		}
 
 		err = u.utxodb.Put(txidStream, outsStream, nil)
 		if err != nil {
 			log.Println(err.Error())
-			continue
+			return err
 		}
 	}
+	return nil
 }
 
 func (u UTXOSet) UpdateByBlock(block *types.Block) error {
@@ -141,12 +147,18 @@ func (u UTXOSet) UpdateByBlock(block *types.Block) error {
 
 func (u UTXOSet) ToDB(utxos map[string]*types.TxOuts) error {
 	for txid, outs := range utxos {
+		txidStream, err := hex.DecodeString(txid)
+		if err != nil {
+			log.Println(err.Error())
+			return err
+		}
+
 		stream, err := outs.EncodeToBytes()
 		if err != nil {
 			log.Println(err.Error())
 			return err
 		}
-		err = u.utxodb.Put([]byte(txid), stream, nil)
+		err = u.utxodb.Put(txidStream, stream, nil)
 		if err != nil {
 			log.Println(err.Error())
 			return err
@@ -155,13 +167,13 @@ func (u UTXOSet) ToDB(utxos map[string]*types.TxOuts) error {
 	return nil
 }
 
-func (u UTXOSet) TxToUTXODB(txID [32]byte, outs *types.TxOuts) error {
+func (u UTXOSet) TxToUTXODB(txhash [32]byte, outs *types.TxOuts) error {
 	outsBytes, err := outs.EncodeToBytes()
 	if err != nil {
 		log.Println(err.Error())
 		return err
 	}
-	err = u.utxodb.Put(txID[:], outsBytes, nil)
+	err = u.utxodb.Put(txhash[:], outsBytes, nil)
 	if err != nil {
 		log.Println(err.Error())
 		return err
@@ -249,15 +261,16 @@ func (u UTXOSet) FindUTXOs(pubKeyHash []byte) (*types.TxOuts, error) {
 	return &UTXOs, nil
 }
 
+// txid-->parentoutindex
 func (u UTXOSet) FindTxOutsOfAmount(pubkeyHash []byte, amount uint32) (uint32, map[string][]int) {
-	unspentOutputs := make(map[string][]int)
+	utxos := make(map[string][]int)
 	var accumulated uint32
 
 	iter := u.utxodb.NewIterator(nil, nil)
 	defer iter.Release()
 
 	for iter.Next() {
-		txID := string(iter.Key())
+		txhash := hex.EncodeToString(iter.Key())
 		outs, err := types.DecodeToTxOuts(iter.Value())
 		if err != nil {
 			log.Println(err.Error())
@@ -267,10 +280,10 @@ func (u UTXOSet) FindTxOutsOfAmount(pubkeyHash []byte, amount uint32) (uint32, m
 		for outIdx, out := range outs.Outs {
 			if out.IsLockedWithKey(pubkeyHash) && accumulated < uint32(amount) {
 				accumulated += out.Value
-				unspentOutputs[txID] = append(unspentOutputs[txID], outIdx)
+				utxos[txhash] = append(utxos[txhash], outIdx)
 			}
 		}
 	}
 
-	return accumulated, unspentOutputs
+	return accumulated, utxos
 }

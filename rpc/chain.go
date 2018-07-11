@@ -39,7 +39,6 @@ func (c *RPCClient) GetBlockByHash(r *http.Request, blockHashStr *string, reply 
 	if err != nil {
 		return err
 	}
-	// block, err := c.chain.GetBlockByHash([]byte(*blockHashStr))
 	block, err := c.chain.GetBlockByHash(blockhash)
 	if err != nil {
 		log.Println(err.Error())

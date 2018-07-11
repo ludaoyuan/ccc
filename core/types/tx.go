@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/gob"
+	"encoding/hex"
 	"errors"
 	"log"
 	"math/big"
@@ -44,6 +45,11 @@ var genesisTransaction = &Transaction{
 	TxOut:    []*TxOut{genesisTxOut},
 }
 
+func Genesishash() [32]byte {
+	hash, _ := genesisTransaction.Hash()
+	return hash
+}
+
 // 币基交易没有输入
 func CreateCoinbaseTX(to []byte) (*Transaction, error) {
 	tx := NewTx()
@@ -64,6 +70,14 @@ func CreateCoinbaseTX(to []byte) (*Transaction, error) {
 	}
 
 	return tx, nil
+}
+
+func (tx *Transaction) TxHashString() string {
+	return hex.EncodeToString(tx.TxHash[:])
+}
+
+func (tx *Transaction) Nil() bool {
+	return tx.TxHash == ZeroHash
 }
 
 // 判断是否为币基交易
@@ -95,7 +109,9 @@ func (tx *Transaction) Sign(sig ecdsa.PrivateKey, parentTxs map[string]*Transact
 	}
 
 	for _, in := range tx.TxIn {
-		if parentTxs[string(in.ParentTxHash[:])].TxHash == ZeroHash {
+		parentTx, ok := parentTxs[in.ParentHashString()]
+		// 如果父交易不存在或者父交易 hash错误返回
+		if !ok || (ok && parentTx.TxHash == ZeroHash) {
 			err := errors.New("ERROR: preious Transaction error")
 			log.Println(err.Error())
 			return err
@@ -104,25 +120,27 @@ func (tx *Transaction) Sign(sig ecdsa.PrivateKey, parentTxs map[string]*Transact
 
 	txCopy := tx.TrimmedCopy()
 
-	var err error
 	for inID, in := range txCopy.TxIn {
-		preTx := parentTxs[string(in.ParentTxHash[:])]
+		parentTx := parentTxs[in.ParentHashString()]
 		txCopy.TxIn[inID].SignatureKey = nil
-		txCopy.TxIn[inID].PubKeyHash = preTx.TxOut[in.ParentTxOutIndex].PubKeyHash
-		txCopy.TxHash, err = txCopy.Hash()
+		txCopy.TxIn[inID].PubKeyHash = parentTx.TxOut[in.ParentTxOutIndex].PubKeyHash
+
+		signData, err := txCopy.EncodeToBytes()
 		if err != nil {
 			log.Println(err.Error())
 			return err
 		}
-		txCopy.TxIn[inID].PubKeyHash = nil
 
-		r, s, err := ecdsa.Sign(rand.Reader, &sig, txCopy.TxHash[:])
+		// 此处签名是否需要直接对二进制进行签名
+		r, s, err := ecdsa.Sign(rand.Reader, &sig, signData)
 		if err != nil {
 			log.Println(err.Error())
+			return err
 		}
 		signature := append(r.Bytes(), s.Bytes()...)
 
 		copy(tx.TxIn[inID].SignatureKey[:], signature)
+		txCopy.TxIn[inID].PubKeyHash = nil
 	}
 	return nil
 }
@@ -131,26 +149,14 @@ func (tx *Transaction) Verify(parentTxs map[string]*Transaction) bool {
 	if tx.IsCoinbase() {
 		return true
 	}
-	for _, in := range tx.TxIn {
-		if parentTxs[string(in.ParentTxHash[:])].TxHash == ZeroHash {
-			return false
-		}
-	}
 
 	txCopy := tx.TrimmedCopy()
 	curve := elliptic.P256()
 
-	var err error
 	for inID, in := range tx.TxIn {
-		preTx := parentTxs[string(in.ParentTxHash[:])]
+		parentTx := parentTxs[in.ParentHashString()]
 		txCopy.TxIn[inID].SignatureKey = nil
-		txCopy.TxIn[inID].PubKeyHash = preTx.TxOut[in.ParentTxOutIndex].PubKeyHash
-		txCopy.TxHash, err = txCopy.Hash()
-		if err != nil {
-			log.Println(err.Error())
-			return false
-		}
-		txCopy.TxIn[inID].PubKeyHash = nil
+		txCopy.TxIn[inID].PubKeyHash = parentTx.TxOut[in.ParentTxOutIndex].PubKeyHash
 
 		r := big.Int{}
 		s := big.Int{}
@@ -164,14 +170,20 @@ func (tx *Transaction) Verify(parentTxs map[string]*Transaction) bool {
 		x.SetBytes(in.PubKeyHash[:(keyLen / 2)])
 		y.SetBytes(in.PubKeyHash[(keyLen / 2):])
 
-		rawPubKey := ecdsa.PublicKey{curve, &x, &y}
-		if ecdsa.Verify(&rawPubKey, txCopy.TxHash[:], &r, &s) == false {
+		verifyData, err := txCopy.EncodeToBytes()
+		if err != nil {
+			log.Println(err.Error())
 			return false
 		}
+
+		rawPubKey := ecdsa.PublicKey{curve, &x, &y}
+		if ecdsa.Verify(&rawPubKey, verifyData, &r, &s) == false {
+			return false
+		}
+		txCopy.TxIn[inID].PubKeyHash = nil
 	}
 
 	return true
-
 }
 
 func (tx *Transaction) EncodeToBytes() ([]byte, error) {
