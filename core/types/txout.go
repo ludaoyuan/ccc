@@ -22,6 +22,18 @@ func (out *TxOut) IsLockedWithKey(pubKeyHash []byte) bool {
 	return bytes.Compare(out.PubKeyHash[:], pubKeyHash[:]) == 0
 }
 
+func (out *TxOut) Lock(address []byte) {
+	key := Base58Decode(address)
+	key := key[1 : len(key)-4]
+	out.PubKeyHash = key
+}
+
+func NewTxOut(value uint32, address []byte) *TxOut {
+	out := &TxOut{value, address}
+	out.Lock(address)
+	return out
+}
+
 type TxOuts struct {
 	Outs []*TxOut
 }

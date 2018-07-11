@@ -145,7 +145,7 @@ func (u UTXOSet) UpdateByBlock(block *types.Block) error {
 	return nil
 }
 
-func (u UTXOSet) ToDB(utxos map[string]*types.TxOuts) error {
+func (u UTXOSet) Dump(utxos map[string]*types.TxOuts) error {
 	for txid, outs := range utxos {
 		txidStream, err := hex.DecodeString(txid)
 		if err != nil {
@@ -167,7 +167,7 @@ func (u UTXOSet) ToDB(utxos map[string]*types.TxOuts) error {
 	return nil
 }
 
-func (u UTXOSet) TxToUTXODB(txhash [32]byte, outs *types.TxOuts) error {
+func (u UTXOSet) ToDB(txhash [32]byte, outs *types.TxOuts) error {
 	outsBytes, err := outs.EncodeToBytes()
 	if err != nil {
 		log.Println(err.Error())
@@ -188,7 +188,7 @@ func (u UTXOSet) UpdateByTx(tx *types.Transaction) error {
 			newOuts.Outs = append(newOuts.Outs, tx.TxOut[i])
 		}
 
-		err := u.TxToUTXODB(tx.TxHash, &newOuts)
+		err := u.ToDB(tx.TxHash, &newOuts)
 		if err != nil {
 			log.Println(err.Error())
 			return err

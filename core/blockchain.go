@@ -3,6 +3,7 @@ package core
 import (
 	"core/types"
 	"crypto/ecdsa"
+	"encoding/hex"
 	"errors"
 	"log"
 	"sync"
@@ -228,23 +229,6 @@ func (bc *Blockchain) VerifyTransaction(tx *types.Transaction) bool {
 	return tx.Verify(parentTxs)
 }
 
-func (bc *Blockchain) Get(key []byte) error {
-	v, err := bc.chaindb.Get(key, nil)
-	if err != nil {
-		log.Println(err.Error())
-		return err
-	}
-
-	b, err := types.DecodeToBlock(v)
-	if err != nil {
-		log.Println(err.Error())
-		return err
-	}
-
-	log.Println(*b)
-	return nil
-}
-
 func (bc *Blockchain) MineBlock(minerAddr []byte, txs types.Transactions, utxo *UTXOSet) error {
 	// 更新状态信息
 	for _, tx := range txs {
@@ -300,16 +284,45 @@ func (bc *Blockchain) DumpDB(newBlock *types.Block) error {
 	bc.heightHashCache[newBlock.Height()] = newhash
 	bc.hbLock.Unlock()
 
-	value, err := newBlock.EncodeToBytes()
+	stream, err := newBlock.EncodeToBytes()
 	if err != nil {
 		log.Println(err.Error())
 		return err
 	}
 
-	err = bc.chaindb.Put(newhash[:], value, nil)
+	log.Println(newhash)
+	err = bc.chaindb.Put(newhash[:], stream, nil)
 	if err != nil {
 		log.Println(err.Error())
 		return err
 	}
 	return nil
+}
+
+func (bc *Blockchain) Get(key []byte) error {
+	v, err := bc.chaindb.Get(key, nil)
+	if err != nil {
+		log.Println(err.Error())
+		return err
+	}
+
+	b, err := types.DecodeToBlock(v)
+	if err != nil {
+		log.Println(err.Error())
+		return err
+	}
+
+	log.Println(*b)
+	return nil
+}
+
+// 测试代码
+func (bc *Blockchain) Foreach() {
+	iter := NewBlockchainIterator(bc.chaindb, bc.lastBlock.Hash())
+	for iter.Next() {
+		block := iter.Value()
+		hash := block.Hash()
+		log.Println(hex.EncodeToString(hash[:]))
+		log.Println(hash)
+	}
 }

@@ -26,7 +26,6 @@ type BlockHeader struct {
 
 var genesisBlockHeader = &BlockHeader{
 	Height:    1,
-	Hash:      [32]byte{142, 142, 73, 3, 187, 43, 122, 101, 112, 107, 2, 183, 128, 9, 253, 214, 223, 117, 58, 183, 124, 175, 10, 32, 225, 143, 210, 65, 108, 22, 247, 0},
 	Timestamp: 1531072238,
 }
 

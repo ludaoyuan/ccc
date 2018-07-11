@@ -136,9 +136,9 @@ func (w Wallet) CreateTx(chain *core.Blockchain, to []byte, amount uint32, utxo 
 		return nil, err
 	}
 
-	outputs = append(outputs, &types.TxOut{amount, to})
+	outputs = append(outputs, types.NewTxOut(amount, to))
 	if acc > amount {
-		outputs = append(outputs, &types.TxOut{acc - amount, myAddr})
+		outputs = append(outputs, types.NewTxOut(acc-amount, myAddr))
 	}
 
 	tx := &types.Transaction{LockTime: uint32(time.Now().Unix()), TxIn: inputs, TxOut: outputs}

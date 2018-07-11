@@ -56,6 +56,10 @@ func (b *Block) GenerateHash() ([32]byte, error) {
 	return b.Header.GenerateHash()
 }
 
+func (b *Block) SetHash(hash [32]byte) {
+	b.Header.Hash = hash
+}
+
 func (b *Block) Hash() [32]byte {
 	return b.Header.Hash
 }

@@ -24,7 +24,7 @@ func (c *RPCClient) ListUTXOsByKey(r *http.Request, address *string, reply *type
 		return err
 	}
 
-	err = c.utxo.ToDB(utxo)
+	err = c.utxo.Dump(utxo)
 	if err != nil {
 		log.Println(err.Error())
 		return err
@@ -42,10 +42,17 @@ func (c *RPCClient) ListUTXOsByKey(r *http.Request, address *string, reply *type
 }
 
 // 账户余额
-func (c *RPCClient) GetBalance(r *http.Request, args *string, reply *uint32) error {
+func (c *RPCClient) GetBalance(r *http.Request, address *string, reply *uint32) error {
 	var err error
 
-	utxos, err := c.utxo.FindUTXOs([]byte(*args))
+	w := c.wallets.GetWallet(*address)
+	// TODO: 此处是pubkeyhash 还是 pubkey
+	pubkeyhash, err := w.PubKeyHash()
+	if err != nil {
+		log.Println(err.Error())
+		return err
+	}
+	utxos, err := c.utxo.FindUTXOs(pubkeyhash)
 	if err != nil {
 		log.Println(err.Error())
 		return err

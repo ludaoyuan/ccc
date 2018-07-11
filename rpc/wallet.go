@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"core/types"
+	"log"
 
 	"net/http"
 )
@@ -20,12 +21,19 @@ func (c *RPCClient) ListWallets(r *http.Request, args *types.Nil, reply *WalletS
 
 // 新建钱包
 func (c *RPCClient) CreateWallet(r *http.Request, args *types.Nil, reply *string) error {
-	w, err := c.wallets.CreateWallet()
+	address, err := c.wallets.CreateWallet()
 	if err != nil {
 		return err
 	}
 
-	*reply = w
+	*reply = address
+
+	w := c.wallets.GetWallet(address)
+	key, err := w.PubKeyHash()
+	if err != nil {
+		return err
+	}
+	log.Println(key)
 
 	err = c.wallets.DumpWallet()
 	if err != nil {
