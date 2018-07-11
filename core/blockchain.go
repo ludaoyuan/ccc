@@ -242,6 +242,7 @@ func (bc *Blockchain) Get(key []byte) error {
 	}
 
 	log.Println(*b)
+	return nil
 }
 
 func (bc *Blockchain) MineBlock(minerAddr []byte, txs types.Transactions, utxo *UTXOSet) error {
