@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"core/types"
+	"log"
 	"net/http"
 )
 
@@ -21,5 +22,10 @@ func (c *RPCClient) GenesisBlock(r *http.Request, args *types.Nil, reply *types.
 	// TODO: 不可导出
 	// c.chain.Foreach()
 	*reply = *types.GenesisBlock
+	err = c.utxo.Reindex()
+	if err != nil {
+		log.Println(err.Error())
+		return err
+	}
 	return nil
 }

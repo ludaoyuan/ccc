@@ -35,19 +35,15 @@ func NewUTXOSet(c *Blockchain) (*UTXOSet, error) {
 	return utxoset, nil
 }
 
-// txid --> *Txouts
-func (u UTXOSet) CreateUTXOSet() map[string]*types.TxOuts {
-	utxos := make(map[string]*types.TxOuts)
+// txid --> Txouts
+func (u UTXOSet) CreateUTXOSet() map[string]types.TxOuts {
+	utxos := make(map[string]types.TxOuts)
 	stxos := make(map[string][]int64)
-	iter := u.chain.chaindb.NewIterator(nil, nil)
+	iter := NewBlockchainIterator(u.chain.chaindb, u.chain.lastBlock.Hash())
 
 	// 遍历所有链记录, 提取未花费输出, 并返回
 	for iter.Next() {
-		block, err := u.chain.GetBlockByHash(iter.Key())
-		if err != nil {
-			log.Println(err.Error())
-			continue
-		}
+		block := iter.Value()
 
 		for _, tx := range block.Transactions {
 			txhash := hex.EncodeToString(tx.TxHash[:])
@@ -79,7 +75,12 @@ func (u UTXOSet) CreateUTXOSet() map[string]*types.TxOuts {
 			break
 		}
 	}
-	iter.Release()
+
+	err := iter.Error()
+	if err != nil {
+		log.Println(err.Error())
+		return nil
+	}
 	return utxos
 }
 
@@ -109,7 +110,7 @@ func (u UTXOSet) MakeARaise(pubKeyHash []byte, amount uint32) (uint32, map[strin
 	return acc, raise
 }
 
-// 重建UTXO集合, TODO: 判断是否存在,存在先删除
+// 重建/初始化UTXO集合, TODO: 判断是否存在,存在先删除
 func (u *UTXOSet) Reindex() error {
 	utxos := u.CreateUTXOSet()
 	for txhash, outs := range utxos {
@@ -167,7 +168,7 @@ func (u UTXOSet) Dump(utxos map[string]*types.TxOuts) error {
 	return nil
 }
 
-func (u UTXOSet) ToDB(txhash [32]byte, outs *types.TxOuts) error {
+func (u UTXOSet) dump(txhash [32]byte, outs *types.TxOuts) error {
 	outsBytes, err := outs.EncodeToBytes()
 	if err != nil {
 		log.Println(err.Error())
@@ -182,54 +183,53 @@ func (u UTXOSet) ToDB(txhash [32]byte, outs *types.TxOuts) error {
 }
 
 func (u UTXOSet) UpdateByTx(tx *types.Transaction) error {
-	if tx.IsCoinbase() {
-		newOuts := types.TxOuts{}
-		for i := range tx.TxOut {
-			newOuts.Outs = append(newOuts.Outs, tx.TxOut[i])
-		}
-
-		err := u.ToDB(tx.TxHash, &newOuts)
-		if err != nil {
-			log.Println(err.Error())
-			return err
-		}
-		return nil
+	newOuts := types.TxOuts{}
+	for i := range tx.TxOut {
+		newOuts.Outs = append(newOuts.Outs, tx.TxOut[i])
 	}
 
-	for _, in := range tx.TxIn {
-		updatedOuts := types.TxOuts{}
-		stream, err := u.utxodb.Get(in.ParentTxHash[:], nil)
-		if err != nil {
-			log.Println(err.Error())
-			return err
-		}
-		outs, err := types.DecodeToTxOuts(stream)
-		if err != nil {
-			log.Println(err.Error())
-			return err
-		}
+	err := u.dump(tx.TxHash, &newOuts)
+	if err != nil {
+		log.Println(err.Error())
+		return err
+	}
 
-		for outIndex, out := range outs.Outs {
-			if outIndex != int(in.ParentTxOutIndex) {
-				updatedOuts.Outs = append(updatedOuts.Outs, out)
-			}
-		}
-
-		if len(updatedOuts.Outs) == 0 {
-			err := u.utxodb.Delete(in.ParentTxHash[:], nil)
+	if tx.IsCoinbase() == false {
+		for _, in := range tx.TxIn {
+			updatedOuts := types.TxOuts{}
+			stream, err := u.utxodb.Get(in.ParentTxHash[:], nil)
 			if err != nil {
 				log.Println(err.Error())
 				return err
-			} else {
-				stream, err := updatedOuts.EncodeToBytes()
-				if err != nil {
-					log.Println(err.Error())
-					return err
+			}
+			outs, err := types.DecodeToTxOuts(stream)
+			if err != nil {
+				log.Println(err.Error())
+				return err
+			}
+
+			for outIndex, out := range outs.Outs {
+				if outIndex != int(in.ParentTxOutIndex) {
+					updatedOuts.Outs = append(updatedOuts.Outs, out)
 				}
-				err = u.utxodb.Put(in.PubKeyHash[:], stream, nil)
+			}
+
+			if len(updatedOuts.Outs) == 0 {
+				err := u.utxodb.Delete(in.ParentTxHash[:], nil)
 				if err != nil {
 					log.Println(err.Error())
 					return err
+				} else {
+					stream, err := updatedOuts.EncodeToBytes()
+					if err != nil {
+						log.Println(err.Error())
+						return err
+					}
+					err = u.utxodb.Put(in.ParentTxHash[:], stream, nil)
+					if err != nil {
+						log.Println(err.Error())
+						return err
+					}
 				}
 			}
 		}

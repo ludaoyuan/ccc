@@ -1,8 +1,7 @@
-package wallet
+package common
 
 import (
 	"bytes"
-	"common"
 	"math/big"
 )
 
@@ -28,7 +27,7 @@ func Base58Encode(input []byte) []byte {
 		result = append(result, b58Alphabet[0])
 	}
 
-	common.ReverseBytes(result)
+	ReverseBytes(result)
 
 	return result
 }

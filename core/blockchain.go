@@ -290,7 +290,6 @@ func (bc *Blockchain) DumpDB(newBlock *types.Block) error {
 		return err
 	}
 
-	log.Println(newhash)
 	err = bc.chaindb.Put(newhash[:], stream, nil)
 	if err != nil {
 		log.Println(err.Error())

@@ -2,7 +2,6 @@ package rpc
 
 import (
 	"core/types"
-	"log"
 
 	"net/http"
 )
@@ -29,11 +28,10 @@ func (c *RPCClient) CreateWallet(r *http.Request, args *types.Nil, reply *string
 	*reply = address
 
 	w := c.wallets.GetWallet(address)
-	key, err := w.PubKeyHash()
+	_, err = w.PubKeyHash()
 	if err != nil {
 		return err
 	}
-	log.Println(key)
 
 	err = c.wallets.DumpWallet()
 	if err != nil {

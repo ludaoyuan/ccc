@@ -2,6 +2,7 @@ package types
 
 import (
 	"bytes"
+	"common"
 	"encoding/gob"
 	"log"
 )
@@ -23,8 +24,8 @@ func (out *TxOut) IsLockedWithKey(pubKeyHash []byte) bool {
 }
 
 func (out *TxOut) Lock(address []byte) {
-	key := Base58Decode(address)
-	key := key[1 : len(key)-4]
+	key := common.Base58Decode(address)
+	key = key[1 : len(key)-4]
 	out.PubKeyHash = key
 }
 

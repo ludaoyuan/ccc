@@ -2,7 +2,6 @@ package core
 
 import (
 	"core/types"
-	"errors"
 
 	"github.com/syndtr/goleveldb/leveldb"
 )
@@ -10,10 +9,10 @@ import (
 var ZeroHash = [32]byte{}
 
 type BlockchainIterator struct {
-	pivot [32]byte
-	db    *leveldb.DB
-	value *types.Block
-	err   error
+	pivotHash [32]byte
+	db        *leveldb.DB
+	value     *types.Block
+	err       error
 }
 
 func (bci *BlockchainIterator) Value() *types.Block {
@@ -21,12 +20,12 @@ func (bci *BlockchainIterator) Value() *types.Block {
 }
 
 func (bci *BlockchainIterator) Next() bool {
-	if bci.pivot == ZeroHash {
-		bci.err = errors.New("Hash NIL")
+	// 结束迭代
+	if bci.pivotHash == ZeroHash {
 		return false
 	}
 
-	blockStream, err := bci.db.Get(bci.pivot[:], nil)
+	blockStream, err := bci.db.Get(bci.pivotHash[:], nil)
 	if err != nil {
 		bci.err = err
 		return false
@@ -38,7 +37,7 @@ func (bci *BlockchainIterator) Next() bool {
 		return false
 	}
 
-	bci.pivot = bci.value.ParentHash()
+	bci.pivotHash = bci.value.ParentHash()
 
 	return true
 }
@@ -48,5 +47,5 @@ func (bci *BlockchainIterator) Error() error {
 }
 
 func NewBlockchainIterator(db *leveldb.DB, blockHash [32]byte) *BlockchainIterator {
-	return &BlockchainIterator{db: db, pivot: blockHash}
+	return &BlockchainIterator{db: db, pivotHash: blockHash}
 }

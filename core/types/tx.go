@@ -9,6 +9,7 @@ import (
 	"encoding/gob"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"log"
 	"math/big"
 	"time"
@@ -86,8 +87,8 @@ func (tx *Transaction) IsCoinbase() bool {
 }
 
 func (tx Transaction) TrimmedCopy() *Transaction {
-	var ins []*TxIn
-	var outs []*TxOut
+	ins := make([]*TxIn, 0, len(tx.TxIn))
+	outs := make([]*TxOut, 0, len(tx.TxOut))
 
 	for _, in := range tx.TxIn {
 		ins = append(ins, &TxIn{in.ParentTxHash, in.ParentTxOutIndex, nil, nil})
@@ -125,21 +126,22 @@ func (tx *Transaction) Sign(sig ecdsa.PrivateKey, parentTxs map[string]*Transact
 		txCopy.TxIn[inID].SignatureKey = nil
 		txCopy.TxIn[inID].PubKeyHash = parentTx.TxOut[in.ParentTxOutIndex].PubKeyHash
 
-		signData, err := txCopy.EncodeToBytes()
-		if err != nil {
-			log.Println(err.Error())
-			return err
-		}
+		signData := fmt.Sprintf("%x\n", txCopy)
+		// signData, err := txCopy.EncodeToBytes()
+		// if err != nil {
+		// 	log.Println(err.Error())
+		// 	return err
+		// }
 
 		// 此处签名是否需要直接对二进制进行签名
-		r, s, err := ecdsa.Sign(rand.Reader, &sig, signData)
+		r, s, err := ecdsa.Sign(rand.Reader, &sig, []byte(signData))
 		if err != nil {
 			log.Println(err.Error())
 			return err
 		}
 		signature := append(r.Bytes(), s.Bytes()...)
 
-		copy(tx.TxIn[inID].SignatureKey[:], signature)
+		tx.TxIn[inID].SignatureKey = signature
 		txCopy.TxIn[inID].PubKeyHash = nil
 	}
 	return nil
@@ -170,14 +172,16 @@ func (tx *Transaction) Verify(parentTxs map[string]*Transaction) bool {
 		x.SetBytes(in.PubKeyHash[:(keyLen / 2)])
 		y.SetBytes(in.PubKeyHash[(keyLen / 2):])
 
-		verifyData, err := txCopy.EncodeToBytes()
-		if err != nil {
-			log.Println(err.Error())
-			return false
-		}
+		verifyData := fmt.Sprintf("%x\n", txCopy)
+		// verifyData, err := txCopy.EncodeToBytes()
+		// if err != nil {
+		// 	log.Println(err.Error())
+		// 	return false
+		// }
 
-		rawPubKey := ecdsa.PublicKey{curve, &x, &y}
-		if ecdsa.Verify(&rawPubKey, verifyData, &r, &s) == false {
+		rawPubKey := ecdsa.PublicKey{Curve: curve, X: &x, Y: &y}
+		if ecdsa.Verify(&rawPubKey, []byte(verifyData), &r, &s) == false {
+			log.Println("ecdsa Verify Error")
 			return false
 		}
 		txCopy.TxIn[inID].PubKeyHash = nil
