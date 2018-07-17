@@ -1,8 +1,8 @@
 package miner
 
-import "github.com/syndtr/goleveldb/leveldb"
+import "core"
 
+// 旷工节点
 type Miner struct {
-	blockchain *types.Blockchain
-	chainDB    *leveldb.DB
+	TxPool *core.TxPool
 }

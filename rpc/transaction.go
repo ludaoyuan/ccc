@@ -7,7 +7,6 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"wallet"
 )
 
 // 获取交易
@@ -45,12 +44,12 @@ type SendTransactionCmd struct {
 }
 
 func (c *RPCClient) SendTransaction(r *http.Request, args *SendTransactionCmd, reply *types.Nil) error {
-	if !wallet.ValidateAddress(args.From) {
+	if !common.ValidateAddress(args.From) {
 		err := errors.New("ERROR: Sender address is not valid")
 		log.Println(err.Error())
 		return err
 	}
-	if !wallet.ValidateAddress(args.To) {
+	if !common.ValidateAddress(args.To) {
 		err := errors.New("ERROR: Reciever address is not valid")
 		log.Println(err.Error())
 		return err

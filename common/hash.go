@@ -1,19 +1,31 @@
 package common
 
 import (
+	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"log"
+
+	"golang.org/x/crypto/ripemd160"
 )
 
 const (
-	HashSize          = 32
-	AddressLength     = 20
-	MaxHashStringSize = HashSize * 2
+	HashSize           = 32
+	AddressLength      = 20
+	MaxHashStringSize  = HashSize * 2
+	Version            = byte(0x00)
+	addressChecksumLen = 4
 )
 
+var ZeroHash Address
 var ErrHashStrSize = fmt.Errorf("max hash string length is %v bytes", MaxHashStringSize)
 
 type Hash [HashSize]byte
+type Address [AddressLength]byte
 
 // ReverseBytes reverses a byte array
 func ReverseBytes(data []byte) {
@@ -34,8 +46,7 @@ func NewHash(newHash []byte) (*Hash, error) {
 func (hash *Hash) SetBytes(newHash []byte) error {
 	nhlen := len(newHash)
 	if nhlen != HashSize {
-		return fmt.Errorf("invalid hash length of %v, want %v", nhlen,
-			HashSize)
+		return fmt.Errorf("invalid hash length of %v, want %v", nhlen, HashSize)
 	}
 	copy(hash[:], newHash)
 
@@ -98,4 +109,72 @@ func ToHash32(hash []byte) [32]byte {
 	var key [32]byte
 	copy(key[:], hash)
 	return key
+}
+
+// HashPubKey hashes public key
+func HashPubKey(pubKey []byte) ([]byte, error) {
+	publicSHA256 := sha256.Sum256(pubKey)
+
+	RIPEMD160Hasher := ripemd160.New()
+	_, err := RIPEMD160Hasher.Write(publicSHA256[:])
+	if err != nil {
+		log.Println(err.Error())
+		return nil, err
+	}
+	publicRIPEMD160 := RIPEMD160Hasher.Sum(nil)
+
+	return publicRIPEMD160, nil
+}
+
+// ValidateAddress check if address if valid
+func ValidateAddress(address string) bool {
+	pubKeyHash := Base58Decode([]byte(address))
+	actualChecksum := pubKeyHash[len(pubKeyHash)-addressChecksumLen:]
+	version := pubKeyHash[0]
+	pubKeyHash = pubKeyHash[1 : len(pubKeyHash)-addressChecksumLen]
+	targetChecksum := Checksum(append([]byte{version}, pubKeyHash...))
+
+	return bytes.Compare(actualChecksum, targetChecksum) == 0
+}
+
+// Checksum generates a checksum for a public key
+func Checksum(payload []byte) []byte {
+	firstSHA := sha256.Sum256(payload)
+	secondSHA := sha256.Sum256(firstSHA[:])
+
+	return secondSHA[:addressChecksumLen]
+}
+
+func NewKeyPair() (ecdsa.PrivateKey, []byte, error) {
+	curve := elliptic.P256()
+	private, err := ecdsa.GenerateKey(curve, rand.Reader)
+	if err != nil {
+		log.Println(err.Error())
+		return ecdsa.PrivateKey{}, nil, err
+	}
+	pubKey := append(private.PublicKey.X.Bytes(), private.PublicKey.Y.Bytes()...)
+
+	return *private, pubKey, nil
+}
+
+func PubKeyToAddress(pubKey []byte) (Address, error) {
+	pubKeyHash, err := HashPubKey(pubKey)
+	if err != nil {
+		log.Println(err.Error())
+		return ZeroHash, err
+	}
+
+	versionedPayload := append([]byte{Version}, pubKeyHash...)
+	checksum := Checksum(versionedPayload)
+
+	fullPayload := append(versionedPayload, checksum...)
+	address := Base58Encode(fullPayload)
+
+	return BytesToAddress(address), nil
+}
+
+func BytesToAddress(bytes []byte) Address {
+	var addr Address
+	copy(addr[:], bytes)
+	return addr
 }

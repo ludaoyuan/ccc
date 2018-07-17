@@ -229,7 +229,7 @@ func (bc *Blockchain) VerifyTransaction(tx *types.Transaction) bool {
 	return tx.Verify(parentTxs)
 }
 
-func (bc *Blockchain) MineBlock(minerAddr []byte, txs types.Transactions, utxo *UTXOSet) error {
+func (bc *Blockchain) MineBlock(minerPubKey []byte, txs types.Transactions, utxo *UTXOSet) error {
 	// 更新状态信息
 	for _, tx := range txs {
 		if bc.VerifyTransaction(tx) != true {
@@ -238,6 +238,13 @@ func (bc *Blockchain) MineBlock(minerAddr []byte, txs types.Transactions, utxo *
 			return err
 		}
 	}
+
+	coinbaseTx, err := types.CreateCoinbaseTx(minerPubKey)
+	if err != nil {
+		log.Println(err.Error())
+		return nil
+	}
+	txs = append(txs, coinbaseTx)
 
 	newBlock, err := types.NewBlock(txs, bc.lastBlock.Hash(), bc.lastBlock.Height()+1)
 	if err != nil {

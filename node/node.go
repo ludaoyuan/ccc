@@ -1,11 +1,14 @@
 package node
 
 import (
+	"miner"
 	"rpc"
 )
 
+// 节点分类: 全节点, SPV节点
 type Node struct {
-	rpc *rpc.RPCClient
+	rpc   *rpc.RPCClient
+	miner *miner.Miner
 }
 
 // 服务启动入口

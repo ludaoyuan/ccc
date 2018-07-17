@@ -2,6 +2,7 @@ package types
 
 import (
 	"bytes"
+	"common"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -52,15 +53,16 @@ func Genesishash() [32]byte {
 }
 
 // 币基交易没有输入
-func CreateCoinbaseTX(to []byte) (*Transaction, error) {
+func CreateCoinbaseTx(toPubkey []byte) (*Transaction, error) {
 	tx := NewTx()
 
 	tx.AddTxIn(&TxIn{
-		ParentTxOutIndex: -1,
+		ParentTxOutIndex: 0,
 	})
+	// TODO: 应该是pubkey的
 	tx.AddTxOut(&TxOut{
 		Value:      Subsidy,
-		PubKeyHash: to,
+		PubKeyHash: toPubkey,
 	})
 
 	var err error
@@ -75,6 +77,11 @@ func CreateCoinbaseTX(to []byte) (*Transaction, error) {
 
 func (tx *Transaction) TxHashString() string {
 	return hex.EncodeToString(tx.TxHash[:])
+}
+
+// 交易发起方的公钥
+func (tx *Transaction) FromAddr() (common.Address, error) {
+	return common.PubKeyToAddress(tx.TxIn[0].PubKeyHash)
 }
 
 func (tx *Transaction) Nil() bool {
