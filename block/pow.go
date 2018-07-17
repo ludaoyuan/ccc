@@ -4,13 +4,13 @@ import (
 	"math"
 	"bytes"
 	"crypto/sha256"
-	"fmt"
 	"time"
+	"fmt"
 
 	"util"
 )
 
-const targetBits = 28
+var targetBits = 1
 
 type ProofOfWork struct {
 	Block	*Block
@@ -22,72 +22,62 @@ func (pow *ProofOfWork) SetTarget() {
 	target := uint64(1)
 //	target.Lsh(target, uint(256 - targetBits))
 
-	target = target << (64 - targetBits)
+	target = target << uint(64 - targetBits)
 
 	pow.Target = &target
 }
 
 func (pow *ProofOfWork) prepareData(nonce uint64) []byte {
-	data := bytes.Join([][]byte{pow.Block.Hash, util.IntToHex(int64(nonce))}, []byte{})
+	data := bytes.Join([][]byte{pow.Block.PrevBlockHash, pow.Block.Data, util.IntToHex(pow.Block.Timestamp), util.IntToHex(int64(targetBits)), util.IntToHex(int64(nonce))}, []byte{})
 
 	return data
 }
 
-func (pow *ProofOfWork) Mining() (uint64, []byte) {
+func (pow *ProofOfWork) Mining() (uint64, []byte, bool) {
 	var hashInt uint64
 	var hash [32]byte
 	var nonce uint64
 
-	fmt.Printf("Mining the block containing \"%s\"", pow.Block.Data)
+	fmt.Printf("Mining the block containing \"%s\"\n", pow.Block.Data)
 
-	go func() {
-		p := time.Millisecond * 600
-		fmt.Println()
-		for {
-			fmt.Printf(".")
-			time.Sleep(p)
-			fmt.Printf(".")
-			time.Sleep(p)
-			fmt.Printf(".")
-			time.Sleep(p)
-			fmt.Printf(".")
-			time.Sleep(p)
-			fmt.Printf(".")
-			time.Sleep(p)
-			fmt.Printf(".")
-			time.Sleep(p)
-			fmt.Printf("\b\b\b\b\b\b")
-			fmt.Printf("      ")
-			fmt.Printf("\b\b\b\b\b\b")
-		}
-	}()
-
+	t0 := time.Now().Unix()
 	for nonce < math.MaxUint64 {
-		data := pow.prepareData(nonce)
-		hash = sha256.Sum256(data)
-		hashInt = util.HexToUint(hash[:])
+		for i := 0; i < 600000; i++ {
+			data := pow.prepareData(nonce)
+			hash = sha256.Sum256(data)
+			hashInt = util.HexToUint(hash[:])
 
-		if hashInt < *pow.Target {
-			fmt.Printf("\b\n")
-			fmt.Println("success!")
+			if hashInt < *pow.Target {
+				fmt.Printf("\b\n")
+				fmt.Println("success!")
+				fmt.Printf("%b\n", hashInt)
+				fmt.Printf("%x\n", hashInt)
+				fmt.Printf("%v\n\n", hashInt)
+
+				t1 := time.Now().Unix()
+				fmt.Println("\r", t1 - t0, "s\n")
+				return nonce, hash[:], (t1 - t0) > 180
+			}
+
+			/*
+			fmt.Printf("%b\n", *pow.target)
 			fmt.Printf("%b\n", hashInt)
 			fmt.Printf("%x\n", hashInt)
 			fmt.Printf("%v\n\n", hashInt)
+			*/
 
-			return nonce, hash[:]
+			if i % 100000 == 0 {
+				fmt.Printf(".")
+			}
+			nonce++
+
+	//		time.Sleep(time.Microsecond)
 		}
-
-		/*
-		fmt.Printf("%b\n", *pow.target)
-		fmt.Printf("%b\n", hashInt)
-		fmt.Printf("%x\n", hashInt)
-		fmt.Printf("%v\n\n", hashInt)
-		*/
-
-		nonce++
-
-//		time.Sleep(time.Microsecond)
+		fmt.Printf("\b\b\b\b\b\b")
+		fmt.Printf("      ")
+		fmt.Printf("\b\b\b\b\b\b")
 	}
+	t1 := time.Now().Unix()
 
-	return nonce, hash[:]
+	return nonce, hash[:], (t1 - t0) > 180
 }
