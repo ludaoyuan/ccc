@@ -21,23 +21,21 @@ type Miner struct {
 
 	// Message
 	txMsg         chan *types.Transaction
-	netBlockMsg   chan *types.Block
 	localBlockMsg chan *types.Block
 
 	stop chan struct{}
 }
 
-func NewMiner(chaindb *leveldb.DB, chain *core.BlockChain, coinbase common.Hash, mineMsg chan *types.Block, stop chan struct{}) *Miner {
+func NewMiner(chaindb *leveldb.DB, chain *core.BlockChain, coinbase common.Hash) *Miner {
 	m := &Miner{
 		chainDB:  chaindb,
 		chain:    chain,
 		coinbase: coinbase,
 		txPool:   NewTxPool(),
-		worker:   NewWorker(chain.LastBlockHeader(), stop),
+		worker:   NewWorker(chain.LastBlockHeader()),
 		stop:     make(chan struct{}),
 
 		txMsg:         make(chan *types.Transaction),
-		netBlockMsg:   make(chan *types.Block),
 		localBlockMsg: make(chan *types.Block),
 	}
 	return m
@@ -50,8 +48,9 @@ func (m *Miner) Start() {
 			m.stopWork()
 			return
 		case tx, ok := <-m.txMsg:
-			m.txPool.AddTx(tx)
-		case block, ok := <-m.netBlockMsg:
+			if ok {
+				m.txPool.AddTx(tx)
+			}
 		case <-m.txPool.Notify():
 			go m.Mining()
 		}
@@ -78,10 +77,6 @@ func (m *Miner) ReceiveTx(newTx *types.Transaction) {
 	m.txMsg <- newTx
 }
 
-func (m *Miner) ReceiveBlock(newBlock *types.Block) {
-	m.netBlockMsg <- newBlock
-}
-
 func (m *Miner) Mining() {
 	txs := m.txPool.Txs()
 	tx := m.CreateCoinbaseTx()
@@ -95,7 +90,7 @@ func (m *Miner) Mining() {
 	m.localBlockMsg <- block
 }
 
-func (m *Miner) NotifyNewLocalBlock(block *types.Block) <-chan *types.Block {
+func (m *Miner) NotifyNewLocalBlock() <-chan *types.Block {
 	return m.localBlockMsg
 }
 
@@ -103,15 +98,17 @@ func (m *Miner) CreateCoinbaseTx() *types.Transaction {
 	return nil
 }
 
-func (m *Miner) MergeBlock(newBlock *types.Block) {
-	if !m.chain.VerifyBlock(newBlock) {
-		return
-	}
-
-	if m.chain.Height() > newBlock.Height() {
-		return
-	}
-}
+// func (m *Miner) MergeBlock(newBlocks []*types.Block) {
+// 	for _, block := range newBlocks {
+// 		if !m.chain.VerifyBlock(block) {
+// 			return
+// 		}
+//
+// 		if m.chain.Height() > block.Height() {
+// 			return
+// 		}
+// 	}
+// }
 
 func (m *Miner) Update(blocks []*types.Block) error {
 	m.stopWork()

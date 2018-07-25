@@ -55,12 +55,8 @@ func (pool *TxPool) IsAreadyExits(tx *types.Transaction) bool {
 	return true
 }
 
-func (pool *TxPool) addNext(addr common.Hash, tx *types.Transaction) {
-	_, ok := pool.next[addr]
-	if !ok {
-		pool.next[addr] = make(types.Transactions, 0)
-	}
-	pool.next[addr] = append(pool.next[addr], tx)
+func (pool *TxPool) addNext(addr common.Address, tx *types.Transaction) {
+	pool.next = append(pool.next, tx)
 }
 
 func (pool *TxPool) removeTx(tx *types.Transaction) {
@@ -70,10 +66,10 @@ func (pool *TxPool) removeTx(tx *types.Transaction) {
 		delete(pool.pending, addr)
 	}
 
-	hash = tx.Hash()
-	for i, oldTx := range tx.next {
+	hash := tx.Hash()
+	for i, oldTx := range pool.next {
 		if hash.IsEqual(oldTx.Hash()) {
-			tx.next = append(tx.next[:i], tx.next[i+1:]...)
+			pool.next = append(pool.next[:i], pool.next[i+1:]...)
 			break
 		}
 	}
@@ -84,12 +80,12 @@ func (pool *TxPool) Txs() types.Transactions {
 	defer pool.poolMu.Unlock()
 
 	txs := make(types.Transactions, 0, len(pool.pending)+len(pool.next))
-	for addr, tx := range tx.pending {
+	for addr, tx := range pool.pending {
 		txs = append(txs, tx)
 		delete(pool.pending, addr)
 	}
 
-	for addr, tx := range pool.next {
+	for _, tx := range pool.next {
 		txs = append(txs, tx)
 	}
 	return txs

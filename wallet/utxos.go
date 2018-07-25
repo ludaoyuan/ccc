@@ -34,7 +34,7 @@ func (ws *WalletSvr) UnspentOutputs(pubKeyHash common.Hash) error {
 			if tx.IsCoinbase() == false {
 				for _, in := range tx.TxIn {
 					inParentHash := in.HexParentTxHash()
-					spentTXOs[inParentHash] = append(spentTXOs[inParentHash], in.PreviousOutPoint.Index)
+					spentTXOs[inParentHash] = append(spentTXOs[inParentHash], int64(in.PreviousOutPoint.Index))
 				}
 			}
 		}
@@ -87,7 +87,7 @@ func (ws *WalletSvr) FindSpendableOuts(address string, amount int64) (int64, typ
 		hash := common.HexHash2Hash(hexTxHash)
 		for index, out := range outs {
 			if out.MatchPubKeyHash(hashPubKey) && total < amount {
-				outPoints = append(outPoints, &types.OutPoint{hash, int64(index)})
+				outPoints = append(outPoints, &types.OutPoint{hash, uint32(index)})
 			}
 		}
 	}

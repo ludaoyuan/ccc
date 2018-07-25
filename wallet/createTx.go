@@ -1,6 +1,7 @@
 package wallet
 
 import (
+	"common"
 	"core/types"
 	"crypto/ecdsa"
 	"crypto/rand"
@@ -23,7 +24,7 @@ func (ws *WalletSvr) UpdateByTx(tx *types.Transaction) {
 			outs := ws.utxos[inParentHash]
 			updateOuts := make(types.TxOuts, 0, len(outs))
 			for idx, out := range outs {
-				if int64(idx) != in.PreviousOutPoint.Index {
+				if uint32(idx) != in.PreviousOutPoint.Index {
 					updateOuts = append(updateOuts, out)
 				}
 			}
@@ -82,8 +83,8 @@ func (ws *WalletSvr) SignTx(tx *types.Transaction) error {
 	}
 
 	for _, in := range tx.TxIn {
-		parentTx, ok := parentTxs[in.ParentHashString()]
-		if !ok || (ok && parentTx.TxHash == ZeroHash) {
+		parentTx, ok := parentTxs[in.ParentTxHash()]
+		if !ok || (ok && parentTx.TxHash == common.ZeroHash) {
 			err := errors.New("ERROR: preious Transaction error")
 			log.Println(err.Error())
 			return err
@@ -93,21 +94,21 @@ func (ws *WalletSvr) SignTx(tx *types.Transaction) error {
 	txCopy := tx.Copy()
 
 	for i, in := range txCopy.TxIn {
-		parentTx := parentTxs[in.ParentHashString()]
-		txCopy.TxIn[i].SignatureKey = nil
-		txCopy.TxIn[i].PubKeyHash = parentTx.TxOut[in.ParentTxOutIndex].PubKeyHash
+		parentTx := parentTxs[in.ParentTxHash()]
+		txCopy.TxIn[i].Signature = nil
+		txCopy.TxIn[i].PublicKey = parentTx.TxOut[in.PreviousOutPoint.Index].PubKeyHash
 
 		signData := fmt.Sprintf("%x\n", txCopy)
 
-		r, s, err := ecdsa.Sign(rand.Reader, &sig, []byte(signData))
+		r, s, err := ecdsa.Sign(rand.Reader, &ws.myWallet.PrivateKey, []byte(signData))
 		if err != nil {
 			log.Println(err.Error())
 			return err
 		}
 		signature := append(r.Bytes(), s.Bytes()...)
 
-		tx.TxIn[i].SignatureKey = signature
-		txCopy.TxIn[i].PubKeyHash = nil
+		tx.TxIn[i].Signature = signature
+		txCopy.TxIn[i].PublicKey = common.ZeroHash
 	}
 	return nil
 }

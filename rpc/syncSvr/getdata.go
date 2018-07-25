@@ -15,7 +15,7 @@ type getDataArgs struct {
 type Blocks []*types.Block
 
 func (s *SyncServer) GetData(args *getDataArgs, reply *Blocks) error {
-	blocks, err := s.chain.FindCommonLastCommonBlock(args.ID)
+	blocks, err := s.chain.FindCommonLastCommonBlock(args.IDs)
 	if err != nil {
 		log.Println(err.Error())
 		return err
@@ -28,20 +28,25 @@ func (s *SyncServer) GetData(args *getDataArgs, reply *Blocks) error {
 	return nil
 }
 
-func (s *SyncServer) sendGetData(to string, hashList []common.Hash) (*types.Block, error) {
-	client, err := jsonrpc.Dial("tcp", to)
-	if err != nil {
-		log.Println(err.Error())
-		return nil, err
-	}
+func (s *SyncServer) sendGetData(hashList []common.Hash) ([]*types.Block, error) {
+	blocks := make([]*types.Block, 0)
+	for _, addr := range s.addrs {
+		client, err := jsonrpc.Dial("tcp", addr)
+		if err != nil {
+			log.Println(err.Error())
+			return nil, err
+		}
 
-	args := getDataArgs{AddFrom: myHost, IDs: hashList}
-	blocks := make(Blocks, 0)
+		args := getDataArgs{AddFrom: myHost, IDs: hashList}
 
-	err = client.Call("SyncServer.GetData", &args, blocks)
-	if err != nil {
-		log.Println(err.Error())
-		return nil, err
+		newBlocks := make([]*types.Block, 0)
+		err = client.Call("SyncServer.GetData", &args, newBlocks)
+		if err != nil {
+			log.Println(err.Error())
+			return nil, err
+		}
+
+		blocks = append(blocks, newBlocks...)
 	}
 
 	return blocks, nil

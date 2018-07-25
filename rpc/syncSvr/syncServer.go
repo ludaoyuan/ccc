@@ -20,37 +20,42 @@ type SyncServer struct {
 	syncMu sync.RWMutex
 
 	chain *core.BlockChain
-	Addrs Addresses
+	addrs Addresses
 
-	netTxMsg    chan *types.Transaction
-	netBlockMsg chan *types.Block
-	netNodeMsg  chan string
+	netTxMsg     chan *types.Transaction
+	netBlockMsgs chan []*types.Block
+	netBlockMsg  chan *types.Block
 }
 
-func (s *SyncServer) NotifyNetBlock() <-chan types.Block {
+func (s *SyncServer) NotifyNetBlocks() <-chan []*types.Block {
+	return s.netBlockMsgs
+}
+
+func (s *SyncServer) NotifyNetBlock() <-chan *types.Block {
 	return s.netBlockMsg
 }
 
-func (s *SyncServer) NotifyNetTx() <-chan types.Transaction {
+func (s *SyncServer) NotifyNetTx() <-chan *types.Transaction {
 	return s.netTxMsg
 }
 
-func (s *SyncServer) NotifyNetNodeMsg() <-chan string {
-	return s.netNodeMsg
-}
-
-func NewSyncServer(chain *core.Blockchain) *SyncServer {
+func NewSyncServer(chain *core.BlockChain) *SyncServer {
 	return &SyncServer{
-		chain:       chain,
-		Addrs:       make([]string, 0),
-		netTxMsg:    make(chan *types.Transaction),
-		netBlockMsg: make(chan *types.Block),
-		netNodeMsg:  make(chan string),
+		chain:        chain,
+		addrs:        make([]string, 0),
+		netTxMsg:     make(chan *types.Transaction),
+		netBlockMsgs: make(chan []*types.Block),
+		netBlockMsg:  make(chan *types.Block),
 	}
 }
 
+func (s *SyncServer) Stop() {
+	close(s.netTxMsg)
+	close(s.netBlockMsgs)
+}
+
 func (s *SyncServer) Start() {
-	rpc.Register(sync)
+	rpc.Register(s)
 	rpc.HandleHTTP()
 
 	tcpAddr, err := net.ResolveTCPAddr("tcp", myHost)

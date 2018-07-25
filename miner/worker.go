@@ -4,14 +4,14 @@ import (
 	"bytes"
 	"common"
 	"core/types"
+	"crypto/sha256"
 	"fmt"
-	"log"
 	"math"
 	"math/big"
 )
 
 var (
-	maxNonce = math.MaxInt64
+	maxNonce = int64(math.MaxInt64)
 )
 
 const targetBits = 5
@@ -23,14 +23,14 @@ type Worker struct {
 	header *types.BlockHeader
 	target *big.Int
 
-	stop <-chan struct{}
+	stop chan struct{}
 }
 
-func NewWorker(header *types.BlockHeader, stop <-chan struct{}) *Worker {
+func NewWorker(header *types.BlockHeader) *Worker {
 	w := &Worker{
 		header: header,
 		target: big.NewInt(1),
-		stop:   stop,
+		stop:   make(chan struct{}),
 	}
 
 	w.target.Lsh(w.target, uint(256-targetBits))
@@ -42,16 +42,14 @@ func (w *Worker) SetHeader(header *types.BlockHeader) {
 }
 
 func (w *Worker) Stop() {
-	close(w.stop)
-	w.stop = make(chan struct{})
 }
 
-func (w *Worker) tryData(nonce int) []byte {
+func (w *Worker) tryData(nonce int64) []byte {
 	data := bytes.Join(
 		[][]byte{
 			common.IntToHex(int64(w.header.Version)),
-			w.header.ParentHash,
-			w.header.MerkleRoot,
+			w.header.ParentHash[:],
+			w.header.MerkleRoot[:],
 			common.IntToHex(int64(w.header.Timestamp)),
 			common.IntToHex(int64(nonce)),
 			// TODO:
@@ -64,39 +62,37 @@ func (w *Worker) tryData(nonce int) []byte {
 	return data
 }
 
-func (pow *Worker) tryOnce(nonce int64) (int64, common.Hash) {
+func (pow *Worker) tryOnce(nonce int64) {
 	var hashInt big.Int
 	var hash common.Hash
 
 	data := pow.tryData(nonce)
 
-	hash = ssha256.Sum256(data)
+	hash = sha256.Sum256(data)
 	if math.Remainder(float64(nonce), 100000) == 0 {
 		fmt.Printf("\r%x", hash)
 	}
 	hashInt.SetBytes(hash[:])
 
 	if hashInt.Cmp(pow.target) == -1 {
-		break
+		pow.header.Nonce = uint32(nonce)
 	} else {
 		nonce++
 	}
-	return nonce, hash
+	return
 }
 
 func (pow *Worker) Run() {
-	var hash common.Hash
 	var nonce int64
 
-	log.Printf("Mining the block containing \"%s\"\n", pow.block.Data)
 	for nonce < maxNonce {
 		select {
 		case <-pow.stop:
 			return
 
 		default:
-			nonce, hash = pow.tryOnce(nonce)
-			pow.header.Nonce = nonce
+			pow.tryOnce(nonce)
+			pow.header.Nonce = uint32(nonce)
 			break
 		}
 	}

@@ -169,7 +169,7 @@ func (bc *BlockChain) HashExist(hash common.Hash) bool {
 	return err == nil
 }
 
-func (bc *BlockChain) FindCommonLastCommonBlock(hashList []common.Hash) ([]*types.Block, error) {
+func (bc *BlockChain) FindCommonLastCommonBlockHash(hashList []common.Hash) (common.Hash, error) {
 	iter := NewBlockChainIterator(bc.chainDB, bc.LastBlockHash())
 
 	start, mid, end := 0, 0, len(hashList)-1
@@ -191,13 +191,48 @@ func (bc *BlockChain) FindCommonLastCommonBlock(hashList []common.Hash) ([]*type
 	err := iter.Error()
 	if err != nil {
 		log.Println(err.Error())
+		return common.ZeroHash, err
+	}
+
+	return hashList[end], nil
+}
+
+func (bc *BlockChain) FindCommonLastCommonBlock(hashList []common.Hash) ([]*types.Block, error) {
+	lastCommonBlockHash, err := bc.FindCommonLastCommonBlockHash(hashList)
+	if err != nil {
+		return nil, err
+	}
+	return bc.GetMissingBlocks(lastCommonBlockHash)
+}
+
+func (bc *BlockChain) GetMissingBlocksHash(hashList []common.Hash) ([]common.Hash, error) {
+	lastCommonBlockHash, err := bc.FindCommonLastCommonBlockHash(hashList)
+	if err != nil {
+		log.Println(err.Error())
 		return nil, err
 	}
 
-	return bc.GetMissingBlocks(hashList[end]), nil
+	missingBlockHashList := make([]common.Hash, 0)
+
+	iter := NewBlockChainIterator(bc.chainDB, bc.LastBlockHash())
+	for iter.Next() {
+		hash := iter.Key()
+		if hash.IsEqual(lastCommonBlockHash) {
+			break
+		}
+		missingBlockHashList = append(missingBlockHashList, hash)
+	}
+
+	err = iter.Error()
+	if err != nil {
+		log.Println(err.Error())
+		return nil, err
+	}
+
+	return missingBlockHashList, err
 }
 
-func (bc *BlockChain) GetMissingBlocks(left common.Hash) []*types.Block {
+func (bc *BlockChain) GetMissingBlocks(left common.Hash) ([]*types.Block, error) {
 	blocks := make([]*types.Block, 0)
 	iter := NewBlockChainIterator(bc.chainDB, bc.LastBlockHash())
 
@@ -208,5 +243,11 @@ func (bc *BlockChain) GetMissingBlocks(left common.Hash) []*types.Block {
 		blocks = append(blocks, iter.Value())
 	}
 
-	return blocks
+	err := iter.Error()
+	if err != nil {
+		log.Println(err.Error())
+		return nil, err
+	}
+
+	return blocks, nil
 }

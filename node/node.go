@@ -1,8 +1,11 @@
 package node
 
 import (
+	"core"
+	"core/types"
 	"log"
 	"miner"
+	syncsvr "rpc/syncSvr"
 	"wallet"
 
 	"github.com/syndtr/goleveldb/leveldb"
@@ -15,10 +18,14 @@ const chainPath = "./chaindb"
 type Node struct {
 	chainDB *leveldb.DB
 
-	chainSvr  *core.BlcokChain
+	chainSvr  *core.BlockChain
 	walletSvr *wallet.WalletSvr
 	minerSvr  *miner.Miner
-	syncSvr   *syncsvr.SyncSvr
+	syncSvr   *syncsvr.SyncServer
+}
+
+func init() {
+	log.SetFlags(log.Lshortfile | log.LstdFlags)
 }
 
 func NewNode() *Node {
@@ -39,11 +46,11 @@ func NewNode() *Node {
 	}
 
 	walletSvr := wallet.NewWalletSvr(chaindb, chainSvr)
-	syncSvr := syncSvr.NewSyncServer(chainSvr)
+	syncSvr := syncsvr.NewSyncServer(chainSvr)
 
-	minerSvr := miner.newminer(chaindb, chainSvr, walletSvr.Coinbase())
+	minerSvr := miner.NewMiner(chaindb, chainSvr, walletSvr.Coinbase())
 
-	return Node{
+	return &Node{
 		chainDB:   chaindb,
 		chainSvr:  chainSvr,
 		walletSvr: walletSvr,
@@ -52,7 +59,7 @@ func NewNode() *Node {
 	}
 }
 
-func (n *Node) Start() error {
+func (n *Node) Start() {
 	go n.minerSvr.Start()
 	go n.walletSvr.Start()
 	go n.syncSvr.Start()
@@ -60,10 +67,18 @@ func (n *Node) Start() error {
 
 	for {
 		select {
-		case block := <-n.minerSvr.NotifyNewLocalBlock:
-			go n.syncSvr.BroadCastBlock(block)
-		case block := <-n.syncSvr.NotifyNetBlock():
-			n.minerSvr.MergeBlock()
+		case block, ok := <-n.minerSvr.NotifyNewLocalBlock():
+			if ok {
+				go n.syncSvr.BroadCastBlock(block)
+			}
+		case blocks, ok := <-n.syncSvr.NotifyNetBlocks():
+			if ok {
+				n.minerSvr.Update(blocks)
+			}
+		case block, ok := <-n.syncSvr.NotifyNetBlock():
+			if ok {
+				n.minerSvr.Update([]*types.Block{block})
+			}
 		case tx := <-n.syncSvr.NotifyNetTx():
 			n.minerSvr.ReceiveTx(tx)
 		}

@@ -29,9 +29,9 @@ func NewWallet() (*Wallet, error) {
 }
 
 func (w *Wallet) Address() string {
-	pubKeyHash = w.PubKeyHash()
+	pubKeyHash := w.PubKeyHash()
 
-	versionedPayload := append([]byte{version}, pubKeyHash...)
+	versionedPayload := append([]byte{version}, pubKeyHash[:]...)
 	checksum := common.Checksum(versionedPayload)
 
 	fullPayload := append(versionedPayload, checksum...)
@@ -42,7 +42,9 @@ func (w *Wallet) Address() string {
 
 func (w *Wallet) PubKeyHash() common.Hash {
 	pubKeyHash, _ := common.HashPubKey(w.PublicKey)
-	return pubKeyHash
+	var hash common.Hash
+	hash.SetBytes(pubKeyHash)
+	return hash
 }
 
 func newKeyPair() (ecdsa.PrivateKey, common.Hash, error) {
@@ -70,7 +72,7 @@ func ValidateAddress(address string) bool {
 	actualChecksum := pubKeyHash[len(pubKeyHash)-addressChecksumLen:]
 	version := pubKeyHash[0]
 	pubKeyHash = pubKeyHash[1 : len(pubKeyHash)-addressChecksumLen]
-	targetChecksum := checksum(append([]byte{version}, pubKeyHash...))
+	targetChecksum := common.Checksum(append([]byte{version}, pubKeyHash...))
 
 	return bytes.Compare(actualChecksum, targetChecksum) == 0
 }

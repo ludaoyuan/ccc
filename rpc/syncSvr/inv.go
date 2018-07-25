@@ -8,25 +8,22 @@ import (
 
 type invCMD struct {
 	AddFrom       string
-	chainHashList []*common.Hash
+	chainHashList []common.Hash
 }
 
 type HashList []common.Hash
 
-func (s *SyncServer) Inv(inv *invCMD, hashList *HashList) error {
-	newBlocks, err := s.chain.FindCommonLastCommonBlock(*hashList)
+func (s *SyncServer) Inv(args *invCMD, hashList *HashList) error {
+	missingList, err := s.chain.GetMissingBlocksHash(args.chainHashList)
 	if err != nil {
 		log.Println(err.Error())
 		return err
 	}
 
-	for _, b := range newBlocks {
-		*blocks = append(*blocks, b)
+	for _, hash := range missingList {
+		*hashList = append(*hashList, hash)
 	}
 
-	for _, hash := range newBlocks {
-		s.sendGetData(to, hash)
-	}
 	return nil
 }
 
