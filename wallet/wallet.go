@@ -1,98 +1,64 @@
 package wallet
 
 import (
+	"bytes"
 	"common"
-	"core"
-	"core/types"
 	"crypto/ecdsa"
 	"encoding/hex"
-	"errors"
-	"log"
-	"time"
 )
 
-// Wallet stores private and public keys
+const version = byte(0x00)
+const addressChecksumLen = 4
+
 type Wallet struct {
 	PrivateKey ecdsa.PrivateKey
-	PublicKey  []byte
 }
 
-// NewWallet creates and returns a Wallet
 func NewWallet() (*Wallet, error) {
-	private, public, err := common.NewKeyPair()
+	private, err := common.GenerateKey()
 	if err != nil {
-		log.Println(err.Error())
 		return nil, err
 	}
-	wallet := Wallet{private, public}
 
+	wallet := Wallet{private}
 	return &wallet, nil
 }
 
-func (w Wallet) PubKeyHash() ([]byte, error) {
-	return common.HashPubKey(w.PublicKey)
+func (w *Wallet) PublicKey() common.Key {
+	public := w.PrivateKey.PublicKey
+	keyBytes := append(public.X.Bytes(), public.Y.Bytes()...)
+
+	var key common.Key
+	key.SetBytes(keyBytes)
+	return key
 }
 
-// GetAddress returns wallet address
-func (w Wallet) GetAddress() ([]byte, error) {
-	pubKeyHash, err := common.HashPubKey(w.PublicKey)
-	if err != nil {
-		log.Println(err.Error())
-		return nil, err
-	}
+func (w *Wallet) Address() string {
+	pubKeyHash := w.PubKeyHash()
 
-	versionedPayload := append([]byte{common.Version}, pubKeyHash...)
+	versionedPayload := append([]byte{version}, pubKeyHash[:]...)
 	checksum := common.Checksum(versionedPayload)
 
 	fullPayload := append(versionedPayload, checksum...)
 	address := common.Base58Encode(fullPayload)
 
-	return address, err
+	return hex.EncodeToString(address)
 }
 
-func (w Wallet) CreateTx(chain *core.Blockchain, to []byte, amount uint32, utxo *core.UTXOSet) (*types.Transaction, error) {
-	var inputs []*types.TxIn
-	var outputs []*types.TxOut
+func (w *Wallet) PubKeyHash() common.Hash {
+	public := w.PublicKey()
+	pubKeyHash, _ := common.HashPubKey(public)
+	var hash common.Hash
+	hash.SetBytes(pubKeyHash)
+	return hash
+}
 
-	pubKeyHash, err := w.PubKeyHash()
-	if err != nil {
-		log.Println(err.Error())
-		return nil, err
-	}
-	acc, validOutputs := utxo.FindTxOutsOfAmount(pubKeyHash, amount)
+func ValidateAddress(address string) bool {
+	pubKeyHash := common.Base58Decode([]byte(address))
+	actualChecksum := pubKeyHash[len(pubKeyHash)-addressChecksumLen:]
+	version := pubKeyHash[0]
+	pubKeyHash = pubKeyHash[1 : len(pubKeyHash)-addressChecksumLen]
+	targetChecksum := common.Checksum(append([]byte{version}, pubKeyHash...))
 
-	if acc < amount {
-		err := errors.New("ERROR: Insufficient balance")
-		log.Println(err.Error())
-		return nil, err
-	}
-
-	for txhashstr, outs := range validOutputs {
-		txhash, _ := hex.DecodeString(txhashstr)
-		for _, out := range outs {
-			input := &types.TxIn{common.ToHash32(txhash), int64(out), nil, w.PublicKey}
-			inputs = append(inputs, input)
-		}
-	}
-
-	myAddr, err := w.GetAddress()
-	if err != nil {
-		log.Println(err.Error())
-		return nil, err
-	}
-
-	outputs = append(outputs, types.NewTxOut(amount, to))
-	if acc > amount {
-		outputs = append(outputs, types.NewTxOut(acc-amount, myAddr))
-	}
-
-	tx := &types.Transaction{LockTime: uint32(time.Now().Unix()), TxIn: inputs, TxOut: outputs}
-	tx.TxHash, err = tx.Hash()
-	if err != nil {
-		log.Println(err.Error())
-		return nil, err
-	}
-	chain.SignTransaction(tx, w.PrivateKey)
-
-	return tx, nil
+	return bytes.Compare(actualChecksum, targetChecksum) == 0
 }

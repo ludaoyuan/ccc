@@ -7,7 +7,6 @@ import (
 
 var b58Alphabet = []byte("123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz")
 
-// Base58Encode encodes a byte array to Base58
 func Base58Encode(input []byte) []byte {
 	var result []byte
 
@@ -22,7 +21,6 @@ func Base58Encode(input []byte) []byte {
 		result = append(result, b58Alphabet[mod.Int64()])
 	}
 
-	// https://en.bitcoin.it/wiki/Base58Check_encoding#Version_bytes
 	if input[0] == 0x00 {
 		result = append(result, b58Alphabet[0])
 	}
@@ -32,7 +30,6 @@ func Base58Encode(input []byte) []byte {
 	return result
 }
 
-// Base58Decode decodes Base58-encoded data
 func Base58Decode(input []byte) []byte {
 	result := big.NewInt(0)
 

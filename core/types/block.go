@@ -2,113 +2,78 @@ package types
 
 import (
 	"bytes"
-	"crypto/sha256"
+	"common"
 	"encoding/gob"
+	"io"
 	"log"
+
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 type Block struct {
-	// 区块头
-	Header *BlockHeader
-	// 交易
+	Header       *BlockHeader
 	Transactions Transactions
-	// 区块大小
-	// Size uint32
 }
 
-var GenesisBlock = &Block{
-	Header:       genesisBlockHeader,
-	Transactions: Transactions{genesisTransaction},
-}
-
-// TODO: 序列化，反序列化需要修改为小端序 binary包
-func (b *Block) EncodeToBytes() ([]byte, error) {
-	var buffer bytes.Buffer
-	encoder := gob.NewEncoder(&buffer)
-
-	err := encoder.Encode(b)
-	if err != nil {
-		return nil, err
+func GenesisBlock() *Block {
+	return &Block{
+		Header:       GenesisBlockHeader(),
+		Transactions: GenesisTransactions(),
 	}
-	return buffer.Bytes(), nil
 }
 
-func DecodeToBlock(blockBytes []byte) (*Block, error) {
-	var block Block
-
-	decoder := gob.NewDecoder(bytes.NewReader(blockBytes))
-	err := decoder.Decode(&block)
-	if err != nil {
-		return nil, err
+func NewBlock(header *BlockHeader, txs Transactions) *Block {
+	return &Block{
+		Header:       header,
+		Transactions: txs,
 	}
-	return &block, nil
-}
-
-func (b *Block) IsGenesisBlock() bool {
-	return b.Header.IsGenesisBlock()
-}
-
-func (b *Block) ParentHash() [32]byte {
-	return b.Header.ParentHash
-}
-
-func (b *Block) GenerateHash() ([32]byte, error) {
-	return b.Header.GenerateHash()
-}
-
-func (b *Block) SetHash(hash [32]byte) {
-	b.Header.Hash = hash
-}
-
-func (b *Block) Hash() [32]byte {
-	return b.Header.Hash
 }
 
 func (b *Block) Height() uint32 {
 	return b.Header.Height
 }
 
-// 创世区块
-// func NewGenesisBlock(coinbase *types.Transaction) *Block {
-//	// 创世区块,从1开始
-//	return NewBlock([]*types.Transaction{coinbase}, []byte{}, 0)
-// }
+func (b *Block) Bits() uint32 {
+	return b.Header.Bits
+}
 
-func NewBlock(txs []*Transaction, parentHash [32]byte, parentHeight uint32) (*Block, error) {
-	header, err := NewBlockHeader(parentHeight, parentHash)
+func (b *Block) Hash() common.Hash {
+	return b.Header.BlockHash()
+}
+
+func (b *Block) ParentBlockHash() common.Hash {
+	return b.Header.ParentHash
+}
+
+func (b *Block) Encode(w io.Writer) error {
+	gob.Register(Block{})
+	enc := gob.NewEncoder(w)
+	return enc.Encode(*b)
+}
+
+func (b *Block) Decode(r io.Reader) error {
+	gob.Register(Block{})
+	dec := gob.NewDecoder(r)
+	return dec.Decode(b)
+}
+
+func (b *Block) IsGenesisBlock() bool {
+	return b.Header.IsGenesisBlock()
+}
+
+func (b *Block) Dump(db *leveldb.DB) error {
+	hash := b.Header.BlockHash()
+	var buf bytes.Buffer
+	err := b.Encode(&buf)
 	if err != nil {
 		log.Println(err.Error())
-		return nil, err
+		return err
 	}
 
-	return &Block{
-		Header:       header,
-		Transactions: txs,
-	}, nil
-}
-
-func (b *Block) HashTransactions() ([32]byte, error) {
-	var txHashes [][]byte
-	var txHash [32]byte
-
-	for _, tx := range b.Transactions {
-		hash, err := tx.Hash()
-		if err != nil {
-			log.Println(err.Error())
-			return [32]byte{}, err
-		}
-		txHashes = append(txHashes, hash[:])
-	}
-	txHash = sha256.Sum256(bytes.Join(txHashes, []byte{}))
-
-	return txHash, nil
-}
-
-func (b *Block) FindTransaction(txhash [32]byte) *Transaction {
-	for _, tx := range b.Transactions {
-		if bytes.Compare(tx.TxHash[:], txhash[:]) == 0 {
-			return tx
-		}
+	err = db.Put(hash.Bytes(), buf.Bytes(), nil)
+	if err != nil {
+		log.Println(err.Error())
+		return err
 	}
 	return nil
 }
